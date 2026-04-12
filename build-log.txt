@@ -1,0 +1,86 @@
+﻿> Task :talk:preBuild UP-TO-DATE
+> Task :talk:preDebugBuild UP-TO-DATE
+> Task :talk:generateDebugResources UP-TO-DATE
+> Task :talk:packageDebugResources UP-TO-DATE
+> Task :talk:processDebugNavigationResources UP-TO-DATE
+> Task :talk:parseDebugLocalResources UP-TO-DATE
+> Task :talk:generateDebugRFile UP-TO-DATE
+> Task :talk:kspDebugKotlin UP-TO-DATE
+
+> Task :talk:compileDebugKotlin FAILED
+.\gradlew : e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk
+/presentation/auth/ui/AuthRoute.kt:146:89 Syntax error: Expecting '"'.
+所在位置 行:1 字符: 1
++ .\gradlew :talk:compileDebugKotlin 2>&1 | Out-File -FilePath .\build- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (e: file:///C:/U... Expecting '"'.:String) [], R 
+   emoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:146:89 Syntax error: Expecting ')'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:160:32 Syntax error: Expecting '"'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:161:21 Unresolved reference 'color'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:161:27 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:161:42 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:161:54 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:161:71 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:262:52 Syntax error: Expecting '"'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:263:25 Unresolved reference 'style'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:263:31 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:263:46 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:263:57 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/ui/AuthRoute.kt:263:69 Syntax error: Expecting an element.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:67:13 Unresolved reference 'startQrLogin'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:132:71 Syntax error: Expecting '"'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:132:71 Syntax error: Expecting ')'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:139:5 Modifier 'private' is not applicable to 'local function'
+.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:154:17 Unresolved reference 'listenToQrSession'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:159:5 Modifier 'private' is not applicable to 'local function'
+.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:171:25 Unresolved reference 'loginWithToken'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:186:5 Modifier 'private' is not applicable to 'local function'
+.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:215:5 Modifier 'override' is not applicable to 'local function
+'.
+e: file:///C:/Users/Administrator/Downloads/sync/talk/src/main/java/cn/verlu/talk/presentatio
+n/auth/vm/AuthFormViewModel.kt:219:2 Syntax error: Missing '}.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':talk:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiC
+ompilationWork
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2s
+7 actionable tasks: 1 executed, 6 up-to-date

@@ -1,0 +1,57 @@
+# Gradle
+.gradle/
+
+# 各模块构建产物（根目录与 :app :talk :music 等）
+build/
+
+# Kotlin / Dalvik
+*.class
+*.dex
+
+# Android 打包与库
+*.apk
+*.aab
+*.ap_
+*.aar
+# Dex Metadata（Baseline Profile 等与 APK 同目录生成）
+*.dm
+
+# 模块下直接导出的 release 目录（勿提交二进制产物）
+app/release/
+music/release/
+talk/release/
+
+# 体积可达数百 MB 的本地曲库 / 数据文件（勿进 Git；本地放 music/catalogSource 或发版用网盘 / Git LFS）
+music/catalogSource/music_catalog.db
+music/src/main/assets/music_catalog.db
+
+# NDK / CMake
+.externalNativeBuild/
+.cxx/
+
+# 本地配置与密钥（勿提交）
+local.properties
+*.jks
+*.keystore
+qweather_private.pem
+
+# Android Studio / IntelliJ
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/shelf/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 调试与性能
+*.hprof
+*.log
+
+# 录屏/截图导出（Android Studio）
+captures/

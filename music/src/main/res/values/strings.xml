@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Music</string>
+    <string name="drawer_tagline_prefix">Powered by </string>
+    <string name="drawer_github_label">verlu</string>
+    <string name="drawer_github_url">https://github.com/morning-verlu</string>
+
+    <string name="drawer_sleep_title">定时关闭</string>
+    <string name="drawer_sleep_hint">到时间后自动暂停播放</string>
+    <string name="drawer_sleep_off">关闭</string>
+    <string name="drawer_sleep_custom">自定义</string>
+    <string name="drawer_sleep_custom_dialog_title">自定义时长</string>
+    <string name="drawer_sleep_remain">约 %1$d:%2$s 后暂停</string>
+
+    <string name="drawer_cache_simple_title">播放缓存</string>
+    <string name="drawer_cache_simple_size">当前约 %1$s</string>
+    <string name="drawer_clear_cache_action">清理缓存</string>
+    <string name="drawer_clear_confirm_title">清理播放缓存？</string>
+    <string name="drawer_clear_confirm_message">将删除本应用为在线听歌临时保存的数据，不影响本地音乐文件与收藏记录。下次播放同一首在线歌曲时可能会重新缓冲。\n\n离线已下载内容（若有）与此无关。</string>
+    <string name="drawer_clear_confirm_ok">清理</string>
+    <string name="drawer_clear_confirm_cancel">取消</string>
+    <string name="drawer_cleared_audio">已清理播放缓存</string>
+    <string name="drawer_clear_failed">清理失败：%1$s</string>
+</resources>
