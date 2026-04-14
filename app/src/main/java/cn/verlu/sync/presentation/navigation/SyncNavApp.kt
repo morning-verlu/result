@@ -59,6 +59,7 @@ import cn.verlu.sync.presentation.home.ui.HomeRoute
 import cn.verlu.sync.presentation.profile.ui.UserProfileRoute
 import cn.verlu.sync.presentation.screentime.ui.ScreenTimeRoute
 import cn.verlu.sync.presentation.temperature.ui.TemperatureRoute
+import cn.verlu.sync.presentation.update.AppUpdateGate
 import cn.verlu.sync.presentation.weather.ui.WeatherRoute
 import coil3.compose.AsyncImage
 import kotlinx.serialization.Serializable
@@ -271,6 +272,9 @@ fun SyncNavApp(modifier: Modifier = Modifier) {
                     }
                 )
             }
+            AppUpdateGate(
+                showMessage = { snackbarHostState.showSnackbar(it) },
+            )
 
             NavDisplay(
                 backStack = backStack,

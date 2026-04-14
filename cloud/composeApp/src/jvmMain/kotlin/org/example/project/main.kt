@@ -4,6 +4,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import cn.verlu.cloud.platform.ensureDesktopProtocolRegistered
 import cn.verlu.cloud.presentation.auth.AuthDeepLinkBus
+import cn.verlu.cloud.presentation.update.CloudDesktopUpdateGate
 
 fun main(args: Array<String>) {
     application {
@@ -15,6 +16,7 @@ fun main(args: Array<String>) {
             title = "Cloud",
         ) {
             App()
+            CloudDesktopUpdateGate()
         }
     }
 }

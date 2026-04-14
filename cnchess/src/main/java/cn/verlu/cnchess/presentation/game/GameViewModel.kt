@@ -250,8 +250,10 @@ class GameViewModel @Inject constructor(
     fun bind(gameId: String, startInReplayMode: Boolean = false) {
         autoReplayOnNextGame = startInReplayMode
         if (boundGameId == gameId) return
+        prevMoveNo = -1L
+        prevStatus = null
         boundGameId = gameId
-        _state.update { it.copy(totalMyTimeMs = 0L, totalOpponentTimeMs = 0L) }
+        _state.value = GameUiState()
         viewModelScope.launch {
             runCatching { gameRepository.bindGame(gameId) }
                 .onFailure { e -> _state.update { it.copy(error = e.message ?: "加载对局失败") } }
@@ -374,7 +376,7 @@ class GameViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        viewModelScope.launch { runCatching { gameRepository.unbindGame() } }
+        gameRepository.unbindGameFireAndForget()
         super.onCleared()
     }
 

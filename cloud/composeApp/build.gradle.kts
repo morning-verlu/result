@@ -100,7 +100,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 9
-        versionName = "1.0.9"
+        versionName = "2026.4.14"
     }
     packaging {
         resources {
@@ -175,7 +175,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "cn.verlu.cloud"
-            packageVersion = "1.0.8"
+            packageVersion = "9.0.0"
             modules(
                 "java.sql",
                 "java.naming",

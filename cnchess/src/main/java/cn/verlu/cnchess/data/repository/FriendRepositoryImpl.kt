@@ -10,6 +10,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
@@ -37,7 +38,7 @@ class FriendRepositoryImpl @Inject constructor(
     override val friends: StateFlow<List<Friendship>> = _friends.asStateFlow()
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val friendChannelName = "cnchess_friendship_changes"
+    private var activeChannel: RealtimeChannel? = null
 
     private fun currentUserId(): String? = supabase.auth.currentUserOrNull()?.id
 
@@ -70,7 +71,9 @@ class FriendRepositoryImpl @Inject constructor(
     }
 
     override suspend fun subscribeToFriendshipChanges() {
-        val channel = supabase.realtime.channel(friendChannelName)
+        activeChannel?.let { runCatching { supabase.realtime.removeChannel(it) } }
+        val channel = supabase.realtime.channel("cnchess_friendship_changes")
+        activeChannel = channel
         channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
             table = "friendships"
         }.onEach {
@@ -90,9 +93,10 @@ class FriendRepositoryImpl @Inject constructor(
     }
 
     override suspend fun unsubscribeFromFriendshipChanges() {
-        runCatching {
-            supabase.realtime.removeChannel(supabase.realtime.channel(friendChannelName))
+        activeChannel?.let { ch ->
+            runCatching { supabase.realtime.removeChannel(ch) }
         }
+        activeChannel = null
     }
 
     private suspend fun fetchProfiles(ids: List<String>): Map<String, Profile> {

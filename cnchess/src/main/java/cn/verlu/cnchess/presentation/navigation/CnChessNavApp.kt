@@ -56,6 +56,7 @@ import cn.verlu.cnchess.presentation.game.GameScreen
 import cn.verlu.cnchess.presentation.history.GameHistoryScreen
 import cn.verlu.cnchess.presentation.invite.IncomingInviteDialog
 import cn.verlu.cnchess.presentation.invite.InviteListenerViewModel
+import cn.verlu.cnchess.presentation.update.AppUpdateGate
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 
@@ -153,6 +154,9 @@ fun CnChessNavApp(modifier: Modifier = Modifier) {
                     onDismiss = { AuthEventManager.showPasswordResetDialog.value = false },
                 )
             }
+            AppUpdateGate(
+                showMessage = { snackbarHostState.showSnackbar(it) },
+            )
             inviteState.incomingInvite?.let { invite ->
                 IncomingInviteDialog(
                     invite = invite,

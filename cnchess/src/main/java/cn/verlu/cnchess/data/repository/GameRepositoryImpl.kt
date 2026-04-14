@@ -23,6 +23,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
@@ -121,23 +122,35 @@ class GameRepositoryImpl @Inject constructor(
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var gameId: String? = null
-    private var channelName: String? = null
+    private var activeChannel: RealtimeChannel? = null
 
     private fun currentUserId(): String? = supabase.auth.currentUserOrNull()?.id
 
     override suspend fun bindGame(gameId: String) {
+        if (this.gameId != null) {
+            cleanupChannel()
+        }
         this.gameId = gameId
+        _gameState.value = null
         refreshGame()
         subscribeRealtime(gameId)
     }
 
     override suspend fun unbindGame() {
-        channelName?.let { name ->
-            runCatching { supabase.realtime.removeChannel(supabase.realtime.channel(name)) }
-        }
-        channelName = null
+        cleanupChannel()
         gameId = null
         _gameState.value = null
+    }
+
+    override fun unbindGameFireAndForget() {
+        repoScope.launch { unbindGame() }
+    }
+
+    private suspend fun cleanupChannel() {
+        activeChannel?.let { ch ->
+            runCatching { supabase.realtime.removeChannel(ch) }
+        }
+        activeChannel = null
     }
 
     override suspend fun makeMove(from: Position, to: Position): Unit = withContext(ioDispatcher) {
@@ -483,8 +496,8 @@ class GameRepositoryImpl @Inject constructor(
 
     private fun subscribeRealtime(gid: String) {
         val name = "cnchess_game_$gid"
-        channelName = name
         val channel = supabase.realtime.channel(name)
+        activeChannel = channel
         channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
             table = "chess_games"
         }.onEach {

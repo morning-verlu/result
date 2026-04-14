@@ -89,6 +89,7 @@ import cn.verlu.talk.presentation.home.HomeScreen
 import cn.verlu.talk.presentation.profile.ProfileQrDialog
 import cn.verlu.talk.presentation.profile.ProfileScreen
 import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
+import cn.verlu.talk.presentation.update.AppUpdateGate
 import coil3.compose.AsyncImage
 
 import kotlinx.coroutines.launch
@@ -191,6 +192,9 @@ fun TalkNavApp(modifier: Modifier = Modifier) {
                     onDismiss = { AuthEventManager.showPasswordResetDialog.value = false },
                 )
             }
+            AppUpdateGate(
+                showMessage = { snackbarHostState.showSnackbar(it) },
+            )
             NavDisplay(
                 backStack = backStack,
                 onBack = pop,

@@ -332,9 +332,7 @@ private fun MessageBubble(
                         model = message.content,
                         contentDescription = "图片消息",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(190.dp)
-                            .clickable { uriHandler.openUri(message.content) },
+                        modifier = Modifier.size(190.dp),
                     )
                 } else if (sharePayload != null) {
                     CloudShareMessageCard(

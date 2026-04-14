@@ -19,8 +19,8 @@ android {
         applicationId = "cn.verlu.music"
         minSdk = 29
         targetSdk = 36
-        versionCode = 7
-        versionName = "3.3"
+        versionCode = 9
+        versionName = "2026.4.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

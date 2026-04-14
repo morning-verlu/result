@@ -50,6 +50,7 @@ import cn.verlu.music.presentation.music.vm.MusicDrawerViewModel
 import cn.verlu.music.presentation.music.ui.NowPlayingRoute
 import cn.verlu.music.presentation.music.ui.OnlineMusicRoute
 import cn.verlu.music.presentation.music.ui.DownloadManagerRoute
+import cn.verlu.music.presentation.update.AppUpdateGate
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -253,6 +254,7 @@ fun MusicNavApp(modifier: Modifier = Modifier) {
     }
 
     CompositionLocalProvider(LocalOpenMusicDrawer provides openDrawer) {
+        AppUpdateGate(showMessage = { _ -> })
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = showMainNav,

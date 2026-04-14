@@ -12,6 +12,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
@@ -68,7 +69,7 @@ class InviteRepositoryImpl @Inject constructor(
     override val gameLaunchEvents: Flow<String> = _gameLaunchEvents.asSharedFlow()
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val inviteChannelName = "cnchess_invite_changes"
+    private var activeChannel: RealtimeChannel? = null
     private val emittedGameIds = linkedSetOf<String>()
 
     /** 仅对「刚被接受」的邀请自动进房；避免冷启动把历史已结束对局再导航一遍。 */
@@ -113,7 +114,9 @@ class InviteRepositoryImpl @Inject constructor(
     }
 
     override suspend fun subscribeInviteChanges() {
-        val channel = supabase.realtime.channel(inviteChannelName)
+        activeChannel?.let { runCatching { supabase.realtime.removeChannel(it) } }
+        val channel = supabase.realtime.channel("cnchess_invite_changes")
+        activeChannel = channel
         channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
             table = "chess_invites"
         }.onEach {
@@ -133,9 +136,10 @@ class InviteRepositoryImpl @Inject constructor(
     }
 
     override suspend fun unsubscribeInviteChanges() {
-        runCatching {
-            supabase.realtime.removeChannel(supabase.realtime.channel(inviteChannelName))
+        activeChannel?.let { ch ->
+            runCatching { supabase.realtime.removeChannel(ch) }
         }
+        activeChannel = null
     }
 
     override suspend fun sendInvite(toUserId: String): Unit = withContext(ioDispatcher) {

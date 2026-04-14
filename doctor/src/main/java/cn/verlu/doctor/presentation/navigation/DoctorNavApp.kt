@@ -50,6 +50,7 @@ import cn.verlu.doctor.presentation.herb.ui.HerbArticleDetailScreen
 import cn.verlu.doctor.presentation.herb.ui.HerbMainShell
 import cn.verlu.doctor.presentation.herb.ui.HerbSearchScreen
 import cn.verlu.doctor.presentation.profile.ProfileScreen
+import cn.verlu.doctor.presentation.update.AppUpdateGate
 
 import kotlinx.serialization.Serializable
 
@@ -114,6 +115,9 @@ fun DoctorNavApp(modifier: Modifier = Modifier) {
                     onDismiss = { AuthEventManager.showPasswordResetDialog.value = false },
                 )
             }
+            AppUpdateGate(
+                showMessage = { snackbarHostState.showSnackbar(it) },
+            )
             NavDisplay(
                 backStack = backStack,
                 onBack = pop,

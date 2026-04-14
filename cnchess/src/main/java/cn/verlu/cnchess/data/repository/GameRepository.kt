@@ -10,6 +10,7 @@ interface GameRepository {
 
     suspend fun bindGame(gameId: String)
     suspend fun unbindGame()
+    fun unbindGameFireAndForget()
     suspend fun makeMove(from: Position, to: Position)
     suspend fun resign()
     suspend fun offerDraw()

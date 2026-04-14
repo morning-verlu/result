@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.doctor"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.4"
+        versionCode = 9
+        versionName = "2026.4.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -11,6 +11,7 @@ import cn.verlu.cloud.data.local.AndroidPlatformContext
 import cn.verlu.cloud.presentation.auth.AuthDeepLinkBus
 import cn.verlu.cloud.presentation.files.IncomingShareBus
 import cn.verlu.cloud.presentation.files.ShareIntentParser
+import cn.verlu.cloud.presentation.update.CloudAndroidUpdateGate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             App()
+            CloudAndroidUpdateGate()
         }
     }
 

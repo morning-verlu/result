@@ -55,3 +55,5 @@ Thumbs.db
 
 # 录屏/截图导出（Android Studio）
 captures/
+
+/admin-web/.env
