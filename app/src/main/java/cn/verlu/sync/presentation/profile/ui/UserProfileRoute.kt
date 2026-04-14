@@ -13,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,8 +31,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.sync.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.sync.presentation.profile.vm.UserProfileViewModel
-import coil.compose.SubcomposeAsyncImage
+import cn.verlu.sync.presentation.ui.SyncLoadingIndicator
+import coil3.compose.SubcomposeAsyncImage
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UserProfileRoute(
     modifier: Modifier = Modifier,
@@ -84,7 +86,7 @@ fun UserProfileRoute(
                             .fillMaxSize()
                             .clip(CircleShape),
                         contentScale = ContentScale.Crop,
-                        loading = { CircularProgressIndicator(modifier = Modifier.padding(32.dp)) },
+                        loading = { SyncLoadingIndicator(modifier = Modifier.padding(32.dp)) },
                         error = {
                             Icon(
                                 imageVector = Icons.Default.AccountCircle,
@@ -129,7 +131,7 @@ fun UserProfileRoute(
                 enabled = !profileState.isLoggingOut
             ) {
                 if (profileState.isLoggingOut) {
-                    CircularProgressIndicator(
+                    SyncLoadingIndicator(
                         color = MaterialTheme.colorScheme.onError,
                         modifier = Modifier.size(24.dp)
                     )

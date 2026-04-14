@@ -36,7 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
+
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -60,7 +60,7 @@ import cn.verlu.sync.presentation.profile.ui.UserProfileRoute
 import cn.verlu.sync.presentation.screentime.ui.ScreenTimeRoute
 import cn.verlu.sync.presentation.temperature.ui.TemperatureRoute
 import cn.verlu.sync.presentation.weather.ui.WeatherRoute
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import kotlinx.serialization.Serializable
 
 private fun isAuthSubFlow(route: NavKey?): Boolean {
@@ -139,14 +139,6 @@ fun SyncNavApp(modifier: Modifier = Modifier) {
             return@LaunchedEffect
         }
 
-        // First check on cold start (wasAuthenticated == null): wait briefly so PKCE session
-        // restore — which briefly emits NotAuthenticated before Authenticated — doesn't cause
-        // a visible flash to the Auth screen. The LaunchedEffect is cancelled and restarted if
-        // isAuthenticated changes during the delay.
-        if (wasAuthenticated == null) delay(300)
-
-        // After the delay, re-verify (the LaunchedEffect would have been cancelled above if
-        // isAuthenticated changed, so if we are still here the user is genuinely unauthenticated).
         val current = backStack.lastOrNull()
         if (isAuthSubFlow(current)) return@LaunchedEffect
 

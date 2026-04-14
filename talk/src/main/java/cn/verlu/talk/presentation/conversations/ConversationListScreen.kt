@@ -26,15 +26,21 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -46,9 +52,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.domain.model.Conversation
 import cn.verlu.talk.domain.model.MessageType
 import cn.verlu.talk.util.formatConversationTime
-import coil.compose.AsyncImage
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
+import cn.verlu.talk.presentation.ui.TalkPullToRefreshIndicator
+import coil3.compose.AsyncImage
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ConversationListScreen(
     modifier: Modifier = Modifier,
@@ -57,6 +65,22 @@ fun ConversationListScreen(
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(Unit) {
+        if (state.conversations.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                if (state.conversations.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Box(
         modifier = modifier
@@ -98,9 +122,17 @@ fun ConversationListScreen(
             PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = viewModel::refresh,
+                state = pullToRefreshState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
+                indicator = {
+                    TalkPullToRefreshIndicator(
+                        state = pullToRefreshState,
+                        isRefreshing = state.isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                },
             ) {
                 when {
                     state.filtered.isEmpty() && state.isInitialLoading -> {
@@ -111,7 +143,7 @@ fun ConversationListScreen(
                         ) {
                             item(key = "loading") {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    CircularProgressIndicator()
+                                    TalkLoadingIndicator()
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         "正在加载会话…",

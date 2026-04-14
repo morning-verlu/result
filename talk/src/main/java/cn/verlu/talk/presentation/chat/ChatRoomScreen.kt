@@ -1,5 +1,9 @@
 package cn.verlu.talk.presentation.chat
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,15 +32,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,7 +49,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,19 +59,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.domain.model.Message
 import cn.verlu.talk.presentation.navigation.LocalSnackbarHostState
 import cn.verlu.talk.util.formatMessageTimestamp
 import cn.verlu.talk.util.shouldShowTimeSeparator
-import coil.compose.AsyncImage
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
+import coil3.compose.AsyncImage
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.launch
+import kotlin.math.max
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoomScreen(
     roomId: String,
@@ -79,7 +91,23 @@ fun ChatRoomScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val snackbar = LocalSnackbarHostState.current
+    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val pickedUri = uri ?: return@rememberLauncherForActivityResult
+        when (val payload = readImagePayload(context, pickedUri)) {
+            is ImagePayloadResult.Error -> {
+                scope.launch { snackbar.showSnackbar(payload.message) }
+            }
+            is ImagePayloadResult.Success -> {
+                val (bytes, mime, ext) = payload
+                viewModel.sendImage(bytes, mime, ext)
+            }
+        }
+    }
 
     // `First item` in a reverseLayout LazyColumn is anchored to the bottom (input side),
     // so the timeline opens on the latest messages with **no** scroll-from-top animation.
@@ -140,7 +168,7 @@ fun ChatRoomScreen(
         ) {
             when {
                 state.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    TalkLoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 }
 
                 state.messages.isEmpty() -> {
@@ -194,6 +222,8 @@ fun ChatRoomScreen(
             text = state.inputText,
             onTextChange = viewModel::onInputChange,
             onSend = viewModel::sendMessage,
+            onPickImage = { imagePicker.launch(arrayOf("image/*")) },
+            isSendingImage = state.isSendingImage,
         )
     }
 }
@@ -256,6 +286,8 @@ private fun MessageBubble(
 ) {
     val clipboard = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
+    val snackbar = LocalSnackbarHostState.current
+    val scope = rememberCoroutineScope()
     var showMenu by remember { mutableStateOf(false) }
     val sharePayload = remember(message.content) { parseCloudShareMessage(message.content) }
 
@@ -295,12 +327,24 @@ private fun MessageBubble(
                         onLongClick = { if (!message.isDeleted) showMenu = true }
                     )
             ) {
-                if (sharePayload != null) {
+                if (message.type == cn.verlu.talk.domain.model.MessageType.IMAGE) {
+                    AsyncImage(
+                        model = message.content,
+                        contentDescription = "图片消息",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(190.dp)
+                            .clickable { uriHandler.openUri(message.content) },
+                    )
+                } else if (sharePayload != null) {
                     CloudShareMessageCard(
                         payload = sharePayload,
                         isMine = isMine,
                         onOpenLink = { uriHandler.openUri(sharePayload.url) },
-                        onCopyLink = { clipboard.setText(AnnotatedString(sharePayload.url)) },
+                        onCopyLink = {
+                            clipboard.setText(AnnotatedString(sharePayload.url))
+                            scope.launch { snackbar.showSnackbar("链接已复制") }
+                        },
                     )
                 } else {
                     Text(
@@ -359,6 +403,7 @@ private fun parseCloudShareMessage(content: String): CloudSharePayload? {
     return CloudSharePayload(fileName = fileName, fileSize = fileSize, url = url)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CloudShareMessageCard(
     payload: CloudSharePayload,
@@ -366,6 +411,9 @@ private fun CloudShareMessageCard(
     onOpenLink: () -> Unit,
     onCopyLink: () -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    val linkColor = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
         Text(
             text = "文件分享",
@@ -395,16 +443,23 @@ private fun CloudShareMessageCard(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = payload.url,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable(onClick = onOpenLink),
+            style = MaterialTheme.typography.bodySmall.copy(textDecoration = TextDecoration.Underline),
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
+            color = linkColor,
+            modifier = Modifier.combinedClickable(
+                onClick = onOpenLink,
+                onLongClick = onCopyLink,
+            ),
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCopyLink) { Text("复制链接") }
-            OutlinedButton(onClick = onOpenLink) { Text("打开链接") }
+        if (payload.url.length > 60) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (expanded) "收起" else "查看更多",
+                style = MaterialTheme.typography.labelSmall,
+                color = linkColor.copy(alpha = 0.8f),
+                modifier = Modifier.clickable { expanded = !expanded },
+            )
         }
     }
 }
@@ -415,6 +470,8 @@ private fun ChatInputBar(
     text: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
+    onPickImage: () -> Unit,
+    isSendingImage: Boolean,
 ) {
     Row(
         modifier = modifier
@@ -433,19 +490,143 @@ private fun ChatInputBar(
             shape = MaterialTheme.shapes.medium,
             maxLines = 4,
         )
-        IconButton(onClick = { /* 更多操作 TODO */ }) {
-            Icon(Icons.Default.Add, contentDescription = "更多")
+        IconButton(
+            onClick = onPickImage,
+            enabled = !isSendingImage,
+            modifier = Modifier.size(52.dp),
+        ) {
+            if (isSendingImage) {
+                TalkLoadingIndicator(modifier = Modifier.size(24.dp))
+            } else {
+                Icon(
+                    Icons.Default.PhotoLibrary,
+                    contentDescription = "选择图片",
+                    modifier = Modifier.size(28.dp),
+                )
+            }
         }
         IconButton(
             onClick = onSend,
             enabled = text.isNotBlank(),
+            modifier = Modifier.size(52.dp),
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.Send,
                 contentDescription = "发送",
+                modifier = Modifier.size(28.dp),
                 tint = if (text.isNotBlank()) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.outline,
             )
         }
     }
+}
+
+private sealed interface ImagePayloadResult {
+    data class Success(
+        val bytes: ByteArray,
+        val mimeType: String,
+        val extension: String,
+    ) : ImagePayloadResult
+
+    data class Error(val message: String) : ImagePayloadResult
+}
+
+private fun readImagePayload(
+    context: Context,
+    uri: Uri,
+    maxBytes: Int = 5 * 1024 * 1024,
+): ImagePayloadResult {
+    val resolver = context.contentResolver
+    val mimeType = resolver.getType(uri)?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+    val ext = when {
+        mimeType.contains("png") -> "png"
+        mimeType.contains("webp") -> "webp"
+        mimeType.contains("gif") -> "gif"
+        else -> "jpg"
+    }
+    return runCatching {
+        val rawBytes = readBytesCapped(context, uri, capBytes = 24 * 1024 * 1024)
+            ?: return ImagePayloadResult.Error("图片过大或读取失败")
+        if (rawBytes.isEmpty()) return ImagePayloadResult.Error("读取图片失败")
+        if (rawBytes.size <= maxBytes) {
+            return ImagePayloadResult.Success(bytes = rawBytes, mimeType = mimeType, extension = ext)
+        }
+        val compressed = compressImageToJpegUnderLimit(context, uri, maxBytes)
+            ?: return ImagePayloadResult.Error("图片过大，压缩后仍超过 5MB")
+        ImagePayloadResult.Success(bytes = compressed, mimeType = "image/jpeg", extension = "jpg")
+    }.getOrElse { e ->
+        android.util.Log.e("Talk/ChatRoom", "readImagePayload failed", e)
+        ImagePayloadResult.Error("图片读取失败，请重试")
+    }
+}
+
+private fun readBytesCapped(
+    context: Context,
+    uri: Uri,
+    capBytes: Int,
+): ByteArray? {
+    val resolver = context.contentResolver
+    return resolver.openInputStream(uri)?.use { input ->
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            total += read
+            if (total > capBytes) return null
+            out.write(buffer, 0, read)
+        }
+        out.toByteArray()
+    }
+}
+
+private fun compressImageToJpegUnderLimit(
+    context: Context,
+    uri: Uri,
+    maxBytes: Int,
+): ByteArray? {
+    val resolver = context.contentResolver
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    val maxSide = max(bounds.outWidth, bounds.outHeight)
+    var sampleSize = 1
+    while ((maxSide / sampleSize) > 2560) sampleSize *= 2
+
+    val decoded = resolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(
+            it,
+            null,
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            },
+        )
+    } ?: return null
+
+    var working = decoded
+    val qualityCandidates = intArrayOf(92, 84, 76, 68, 60, 52, 44, 36, 28)
+    repeat(5) {
+        for (quality in qualityCandidates) {
+            val out = ByteArrayOutputStream()
+            working.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            val bytes = out.toByteArray()
+            if (bytes.size <= maxBytes) {
+                if (working !== decoded) working.recycle()
+                decoded.recycle()
+                return bytes
+            }
+        }
+        val nextW = (working.width * 0.82f).toInt().coerceAtLeast(320)
+        val nextH = (working.height * 0.82f).toInt().coerceAtLeast(320)
+        if (nextW >= working.width || nextH >= working.height) return@repeat
+        val scaled = Bitmap.createScaledBitmap(working, nextW, nextH, true)
+        if (working !== decoded) working.recycle()
+        working = scaled
+    }
+    if (working !== decoded) working.recycle()
+    decoded.recycle()
+    return null
 }

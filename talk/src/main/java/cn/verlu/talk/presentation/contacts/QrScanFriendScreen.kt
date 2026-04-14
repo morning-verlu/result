@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
@@ -65,6 +65,7 @@ import androidx.core.view.ViewCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.presentation.navigation.LocalSnackbarHostState
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
@@ -76,6 +77,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val TAG = "QrScanFriendScreen"
 private const val TALK_UID_SCHEME = "verluTalk://user?uid="
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun QrScanFriendScreen(
     modifier: Modifier = Modifier,
@@ -167,9 +169,8 @@ fun QrScanFriendScreen(
                     enabled = !state.isApprovingCloud,
                 ) {
                     if (state.isApprovingCloud) {
-                        CircularProgressIndicator(
+                        TalkLoadingIndicator(
                             modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Spacer(Modifier.width(8.dp))
@@ -224,20 +225,6 @@ fun QrScanFriendScreen(
             }
         }
 
-        // 提示文字
-        if (hasCameraPermission && !cameraPaused) {
-            Text(
-                text = "扫描好友的「我的二维码」或 Cloud 桌面端的登录码",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp)
-                    .padding(horizontal = 32.dp),
-            )
-        }
-
         // 查找中 spinner
         if (state.isLookingUp) {
             Column(
@@ -251,7 +238,7 @@ fun QrScanFriendScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                TalkLoadingIndicator(modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "正在识别…",

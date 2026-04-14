@@ -19,8 +19,8 @@ android {
         applicationId = "cn.verlu.music"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "3.2"
+        versionCode = 7
+        versionName = "3.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.supabase.realtime)
 
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -34,6 +34,7 @@ data class ChatRoomState(
     val peerProfile: Profile? = null,
     val currentUserId: String = "",
     val isLoading: Boolean = false,
+    val isSendingImage: Boolean = false,
     val error: String? = null,
 )
 
@@ -186,17 +187,47 @@ class ChatRoomViewModel @Inject constructor(
                     // because the real message hasn't arrived yet at this point.
                     Log.d(TAG, "sendMessage success, waiting for realtime to confirm")
                 }
-                .onFailure { e ->
-                    Log.e(TAG, "sendMessage failed", e)
-                    // On failure, roll back: remove the optimistic bubble and restore input text.
+            .onFailure { e ->
+                Log.e(TAG, "sendMessage failed", e)
                     _state.update { s ->
                         s.copy(
                             messages = s.messages.filter { it.id != tempId },
                             inputText = text,
-                            error = "发送失败：${e.message}",
+                            error = "消息发送失败，请重试",
                         )
                     }
                 }
+        }
+    }
+
+    fun sendImage(
+        imageBytes: ByteArray,
+        mimeType: String,
+        extension: String,
+    ) {
+        if (currentRoomId.isEmpty()) return
+        if (imageBytes.isEmpty()) {
+            _state.update { it.copy(error = "图片读取失败") }
+            return
+        }
+        if (imageBytes.size > 5 * 1024 * 1024) {
+            _state.update { it.copy(error = "图片不能超过 5MB") }
+            return
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(isSendingImage = true) }
+            runCatching {
+                messageRepository.sendImageMessage(
+                    roomId = currentRoomId,
+                    imageBytes = imageBytes,
+                    contentType = mimeType,
+                    extension = extension,
+                )
+            }.onFailure { e ->
+                Log.e(TAG, "sendImage failed", e)
+                _state.update { it.copy(error = "图片发送失败，请重试") }
+            }
+            _state.update { it.copy(isSendingImage = false) }
         }
     }
 

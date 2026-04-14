@@ -21,7 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,10 +40,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.sync.presentation.auth.vm.QrLoginState
 import cn.verlu.sync.presentation.auth.vm.QrLoginViewModel
+import cn.verlu.sync.presentation.ui.SyncLoadingIndicator
 
+import android.app.Activity
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun QrLoginRoute(
     modifier: Modifier = Modifier,
@@ -91,7 +94,7 @@ fun QrLoginRoute(
             is QrLoginState.Loading -> {
                 Box(modifier = modifier, contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(modifier = Modifier.size(64.dp))
+                        SyncLoadingIndicator(modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(24.dp))
                         Text(
                             text = "正在授权登录...",
@@ -106,13 +109,15 @@ fun QrLoginRoute(
                 val context = LocalContext.current
                 LaunchedEffect(state) {
                     if (!viewModel.consumeSuccessAutoNavIfNeeded()) return@LaunchedEffect
-                    returnToPackage?.let { pkg ->
-                        context.packageManager.getLaunchIntentForPackage(pkg)?.let { launch ->
+                    if (returnToPackage != null) {
+                        context.packageManager.getLaunchIntentForPackage(returnToPackage)?.let { launch ->
                             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                             runCatching { context.startActivity(launch) }
                         }
+                        (context as? Activity)?.finish()
+                    } else {
+                        onFinished()
                     }
-                    onFinished()
                 }
                 Box(modifier = modifier, contentAlignment = Alignment.Center) {
                     Column(
@@ -142,14 +147,16 @@ fun QrLoginRoute(
                         Spacer(Modifier.height(48.dp))
                         Button(
                             onClick = {
-                                viewModel.consumeSuccessAutoNavIfNeeded() // 忽略返回值，避免与 LaunchedEffect 重复
-                                returnToPackage?.let { pkg ->
-                                    context.packageManager.getLaunchIntentForPackage(pkg)?.let { launch ->
+                                viewModel.consumeSuccessAutoNavIfNeeded()
+                                if (returnToPackage != null) {
+                                    context.packageManager.getLaunchIntentForPackage(returnToPackage)?.let { launch ->
                                         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                         runCatching { context.startActivity(launch) }
                                     }
+                                    (context as? Activity)?.finish()
+                                } else {
+                                    onFinished()
                                 }
-                                onFinished()
                             },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(16.dp)

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,10 +22,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.presentation.auth.vm.AuthSessionViewModel
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
 
 /**
  * 与 Sync 一致：第三方登录或授权回跳后，会话恢复期间显示加载提示。
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AuthSessionLoadingOverlay(
     modifier: Modifier = Modifier,
@@ -52,10 +54,7 @@ fun AuthSessionLoadingOverlay(
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(36.dp),
-                    strokeWidth = 3.dp
-                )
+                TalkLoadingIndicator(modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "正在完成登录",

@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.talk"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = 5
+        versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -69,9 +69,11 @@ dependencies {
     implementation(libs.supabase.auth)
     implementation(libs.supabase.functions)
     implementation(libs.supabase.realtime)
+    implementation(libs.supabase.storage)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

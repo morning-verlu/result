@@ -17,8 +17,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
@@ -36,7 +41,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -61,6 +65,7 @@ import cn.verlu.doctor.presentation.herb.vm.HerbBrowseViewModel
 import cn.verlu.doctor.presentation.herb.vm.HerbFavoritesListViewModel
 import cn.verlu.doctor.presentation.herb.vm.HerbHomeViewModel
 import cn.verlu.doctor.presentation.herb.vm.HerbSharedFavoritesViewModel
+import cn.verlu.doctor.presentation.ui.DoctorPullToRefreshIndicator
 import cn.verlu.doctor.presentation.ui.Material3ExpressiveLoadingIndicator
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -69,6 +74,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HerbMainShell(
     modifier: Modifier = Modifier,
+    avatarUrl: String? = null,
     onOpenArticle: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenProfile: () -> Unit,
@@ -89,7 +95,22 @@ fun HerbMainShell(
                 scrollBehavior = scrollBehavior,
                 actions = {
                     IconButton(onClick = onOpenProfile) {
-                        Icon(Icons.Default.Person, contentDescription = "个人中心")
+                        if (avatarUrl != null) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = "个人信息",
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = "个人信息",
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
                     }
                 },
             )
@@ -166,12 +187,10 @@ private fun HerbHomeTab(
         state = pullToRefreshState,
         modifier = modifier.fillMaxSize(),
         indicator = {
-            PullToRefreshDefaults.LoadingIndicator(
-                modifier = Modifier.align(Alignment.TopCenter),
+            DoctorPullToRefreshIndicator(
                 state = pullToRefreshState,
                 isRefreshing = state.isRefreshing,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.align(Alignment.TopCenter),
             )
         },
     ) {
@@ -197,11 +216,6 @@ private fun HerbHomeTab(
                         },
                         onOpen = { onOpenArticle(p.path) },
                     )
-                }
-            }
-            item {
-                state.error?.let { err ->
-                    Text(err, color = MaterialTheme.colorScheme.error)
                 }
             }
             if (state.spotlight == null && !state.isRefreshing) {
@@ -276,12 +290,10 @@ private fun HerbBrowseTab(
                 .weight(1f)
                 .fillMaxWidth(),
             indicator = {
-                PullToRefreshDefaults.LoadingIndicator(
-                    modifier = Modifier.align(Alignment.TopCenter),
+                DoctorPullToRefreshIndicator(
                     state = pullToRefreshState,
                     isRefreshing = state.isRefreshing,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.align(Alignment.TopCenter),
                 )
             },
         ) {
@@ -324,9 +336,6 @@ private fun HerbBrowseTab(
                             Material3ExpressiveLoadingIndicator()
                         }
                     }
-                }
-                item {
-                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
                 if (state.items.isEmpty() && !state.isRefreshing) {
                     item(key = "browse_empty_pull") {

@@ -19,8 +19,8 @@ android {
         applicationId = "cn.verlu.sync"
         minSdk = 29
         targetSdk = 36
-        versionCode = 7
-        versionName = "3.4"
+        versionCode = 8
+        versionName = "3.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.supabase.realtime)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)
     implementation(libs.play.services.location)
     implementation(libs.eddsa)

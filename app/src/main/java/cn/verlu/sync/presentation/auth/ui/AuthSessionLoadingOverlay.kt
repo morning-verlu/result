@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,11 +22,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.sync.presentation.auth.vm.AuthSessionViewModel
+import cn.verlu.sync.presentation.ui.SyncLoadingIndicator
 
 /**
  * OAuth / 深链回跳后，Supabase 可能短暂处于 [AuthSessionState.isInitializing]，
  * 此时仍停留在登录子页面，本遮罩提示「正在完成登录」。
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AuthSessionLoadingOverlay(
     modifier: Modifier = Modifier,
@@ -54,10 +56,7 @@ fun AuthSessionLoadingOverlay(
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(36.dp),
-                    strokeWidth = 3.dp
-                )
+                SyncLoadingIndicator(modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "正在完成登录",

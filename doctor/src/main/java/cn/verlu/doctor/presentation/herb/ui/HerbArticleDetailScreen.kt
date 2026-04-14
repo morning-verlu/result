@@ -226,7 +226,7 @@ fun HerbArticleDetailScreen(
 
     val imageTransformer = remember(imageUrls) {
 
-        HerbClickableCoil2ImageTransformer { url ->
+        HerbClickableCoil3ImageTransformer { url ->
 
             val idx = imageUrls.indexOf(url).takeIf { it >= 0 } ?: 0
 

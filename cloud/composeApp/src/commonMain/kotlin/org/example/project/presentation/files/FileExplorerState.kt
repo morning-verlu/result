@@ -82,6 +82,8 @@ data class FileExplorerUiState(
     /** 新建文件夹进行中。 */
     val isCreatingFolder: Boolean = false,
     val creatingFolderName: String? = null,
+    /** 移动文件进行中。 */
+    val isMoving: Boolean = false,
 )
 
 class FileExplorerState(
@@ -438,6 +440,80 @@ class FileExplorerState(
                     _state.update { it.copy(error = "重命名失败：${e.message}") }
                 }
         }
+    }
+
+    /* ── 移动到文件夹 ─────────────────────────────────────────── */
+
+    /**
+     * 将 [files] 中的文件移动到 [destinationDirPrefix] 目录下（保留文件名）。
+     * [destinationDirPrefix] 为相对路径，根目录为 `""`，子目录须以 `/` 结尾，如 `docs/sub/`。
+     */
+    fun moveFilesToFolder(files: List<CloudFileItem>, destinationDirPrefix: String) {
+        val toMove = files.filter { !it.isDir }
+        if (toMove.isEmpty()) {
+            _state.update { it.copy(error = "请选择要移动的文件（暂不支持移动文件夹）") }
+            return
+        }
+        val dest = destinationDirPrefix.trim().let { p ->
+            when {
+                p.isEmpty() -> ""
+                p.endsWith("/") -> p
+                else -> "$p/"
+            }
+        }
+        if (toMove.all { f ->
+                val toPath = dest + f.fileName
+                toPath == f.path
+            }) {
+            _state.update { it.copy(error = "目标位置与当前位置相同") }
+            return
+        }
+        scope.launch {
+            _state.update { it.copy(error = null, isMoving = true) }
+            var moved = 0
+            for (file in toMove) {
+                val toPath = dest + file.fileName
+                if (file.path == toPath) continue
+                fileRepository.moveFile(ownerId, file.path, toPath)
+                    .onSuccess { moved++ }
+                    .onFailure { e ->
+                        _state.update {
+                            it.copy(
+                                isMoving = false,
+                                error = "移动失败：${e.message}",
+                            )
+                        }
+                        return@launch
+                    }
+            }
+            _state.update {
+                it.copy(
+                    isMoving = false,
+                    toast = if (moved > 0) "已移动 $moved 个文件" else null,
+                )
+            }
+            refresh(showLoading = false)
+        }
+    }
+
+    /** 某目录下的子文件夹列表（用于「移动到」选择器）。 */
+    fun foldersForMovePicker(dirPrefix: String): List<CloudFileItem> {
+        val p = dirPrefix.trim().let { q ->
+            when {
+                q.isEmpty() -> ""
+                q.endsWith("/") -> q
+                else -> "$q/"
+            }
+        }
+        return filterByPrefix(cachedAllFiles, p).filter { it.isDir }
+    }
+
+    /** 目录前缀的上一级，根目录的上一级仍为根。 */
+    fun parentOfDirPrefix(prefix: String): String {
+        val trimmed = prefix.trimEnd('/')
+        if (trimmed.isEmpty()) return ""
+        val parent = trimmed.substringBeforeLast("/", "")
+        return if (parent.isEmpty()) "" else "$parent/"
     }
 
     /* ── 分享 ─────────────────────────────────────────────────── */

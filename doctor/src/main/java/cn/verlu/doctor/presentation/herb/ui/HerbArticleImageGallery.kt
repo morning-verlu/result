@@ -28,7 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 
 /** 双击放大使用的固定倍数（相对 1:1）；再次双击恢复 1:1。 */
 private const val FIXED_ZOOM_SCALE = 2.5f

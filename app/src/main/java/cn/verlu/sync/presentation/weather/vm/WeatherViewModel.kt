@@ -1,5 +1,6 @@
 package cn.verlu.sync.presentation.weather.vm
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.verlu.sync.domain.repository.WeatherRepository
@@ -45,10 +46,11 @@ class WeatherViewModel @Inject constructor(
                     refresh(isSilent = true)
                 }
                 .onFailure { e ->
+                    Log.e("Sync/WeatherVM", "startSync failed", e)
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            error = e.message ?: "天气同步启动失败"
+                            error = "天气同步启动失败，请稍后重试"
                         )
                     }
                 }
@@ -81,7 +83,8 @@ class WeatherViewModel @Inject constructor(
             _state.update { it.copy(isRefreshing = true, error = null) }
             runCatching { weatherRepository.refreshWithCurrentLocation() }
                 .onFailure { e ->
-                    _state.update { it.copy(error = e.message ?: "定位更新失败") }
+                    Log.e("Sync/WeatherVM", "refreshWithCurrentLocation failed", e)
+                    _state.update { it.copy(error = "定位失败，请检查权限设置") }
                 }
             _state.update { it.copy(isRefreshing = false) }
         }
@@ -112,8 +115,9 @@ class WeatherViewModel @Inject constructor(
                     ) 
                 }
                     .onFailure { e ->
+                        Log.e("Sync/WeatherVM", "refreshWithLocation failed", e)
                         _state.update {
-                            it.copy(error = e.message ?: "刷新失败")
+                            it.copy(error = "天气刷新失败，请稍后重试")
                         }
                     }
             } finally {

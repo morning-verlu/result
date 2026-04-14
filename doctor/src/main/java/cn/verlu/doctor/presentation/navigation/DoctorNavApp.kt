@@ -50,7 +50,7 @@ import cn.verlu.doctor.presentation.herb.ui.HerbArticleDetailScreen
 import cn.verlu.doctor.presentation.herb.ui.HerbMainShell
 import cn.verlu.doctor.presentation.herb.ui.HerbSearchScreen
 import cn.verlu.doctor.presentation.profile.ProfileScreen
-import kotlinx.coroutines.delay
+
 import kotlinx.serialization.Serializable
 
 private fun isAuthSubFlow(route: NavKey?): Boolean {
@@ -93,8 +93,6 @@ fun DoctorNavApp(modifier: Modifier = Modifier) {
             }
             return@LaunchedEffect
         }
-
-        if (wasAuthenticated == null) delay(300)
 
         val current = backStack.lastOrNull()
         if (isAuthSubFlow(current)) return@LaunchedEffect
@@ -156,19 +154,22 @@ fun DoctorNavApp(modifier: Modifier = Modifier) {
                         )
                     }
                     entry<AppRoute.Home> {
+                        val avatarUrl = authState.user?.userMetadata
+                            ?.get("avatar_url")?.toString()
+                            ?.trim('"')
+                            ?.takeIf { it.isNotBlank() && it != "null" }
                         HerbMainShell(
                             modifier = Modifier.fillMaxSize(),
+                            avatarUrl = avatarUrl,
                             onOpenArticle = { path -> backStack.add(AppRoute.HerbArticle(path)) },
                             onOpenSearch = { backStack.add(AppRoute.HerbSearch) },
                             onOpenProfile = { backStack.add(AppRoute.Profile) },
                         )
                     }
                     entry<AppRoute.Profile> {
-                        val authVm: AuthSessionViewModel = hiltViewModel()
-                        ProfileScreen(
+                        ProfileRouteWithShell(
                             modifier = Modifier.fillMaxSize(),
                             onBack = pop,
-                            onSignOut = { authVm.signOut() },
                         )
                     }
                     entry<AppRoute.HerbSearch> {
@@ -294,6 +295,35 @@ private fun AuthPasswordWithShell(
                 .padding(innerPadding),
             onDone = { },
             setTopBarActions = { topActions = it },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileRouteWithShell(
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+) {
+    Scaffold(
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0.dp),
+        topBar = {
+            TopAppBar(
+                title = { Text("个人信息") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        ProfileScreen(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         )
     }
 }

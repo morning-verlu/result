@@ -50,15 +50,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         logAuthCallback(intent.data)
-        supabase.handleDeeplinks(
-            intent = intent,
-            onSessionSuccess = { session ->
-                Log.i(TAG, "deeplink import success, userId=${session.user?.id ?: "unknown"}")
-            },
-            onError = { t ->
-                Log.e(TAG, "deeplink import failed", t)
-            }
-        )
+        if (intent.data?.host == "login") {
+            supabase.handleDeeplinks(
+                intent = intent,
+                onSessionSuccess = { session ->
+                    Log.i(TAG, "deeplink import success, userId=${session.user?.id ?: "unknown"}")
+                },
+                onError = { t ->
+                    Log.e(TAG, "deeplink import failed", t)
+                }
+            )
+        }
 
         setContent {
             SyncTheme {
@@ -73,15 +75,17 @@ class MainActivity : ComponentActivity() {
         // 当 activity 已在栈顶时也要处理一次。
         Log.i(TAG, "onNewIntent data=${intent.data}")
         logAuthCallback(intent.data)
-        supabase.handleDeeplinks(
-            intent = intent,
-            onSessionSuccess = { session ->
-                Log.i(TAG, "deeplink import success, userId=${session.user?.id ?: "unknown"}")
-            },
-            onError = { t ->
-                Log.e(TAG, "deeplink import failed", t)
-            }
-        )
+        if (intent.data?.host == "login") {
+            supabase.handleDeeplinks(
+                intent = intent,
+                onSessionSuccess = { session ->
+                    Log.i(TAG, "deeplink import success, userId=${session.user?.id ?: "unknown"}")
+                },
+                onError = { t ->
+                    Log.e(TAG, "deeplink import failed", t)
+                }
+            )
+        }
     }
 
     private companion object {

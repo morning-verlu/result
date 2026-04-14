@@ -10,12 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +29,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.sync.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.sync.presentation.home.mvi.HomeContract
 import cn.verlu.sync.presentation.home.vm.HomeViewModel
+import cn.verlu.sync.presentation.ui.SyncLoadingIndicator
+import cn.verlu.sync.presentation.ui.SyncPullToRefreshIndicator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,13 +66,15 @@ fun HomeRoute(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun HomeScreen(
     state: HomeContract.State,
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit
 ) {
+    val pullToRefreshState = rememberPullToRefreshState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -79,16 +84,24 @@ private fun HomeScreen(
 
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                SyncLoadingIndicator()
             }
         }
 
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = onRefresh,
+            state = pullToRefreshState,
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            indicator = {
+                SyncPullToRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = state.isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

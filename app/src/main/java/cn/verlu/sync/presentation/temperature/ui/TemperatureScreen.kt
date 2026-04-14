@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.sync.presentation.auth.vm.AuthSessionViewModel
+import cn.verlu.sync.presentation.ui.SyncLoadingIndicator
+import cn.verlu.sync.presentation.ui.SyncPullToRefreshIndicator
 import cn.verlu.sync.presentation.temperature.mvi.TemperatureContract
 import cn.verlu.sync.presentation.temperature.vm.TemperatureViewModel
 import java.text.SimpleDateFormat
@@ -52,13 +55,15 @@ fun TemperatureRoute(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TemperatureScreen(
     state: TemperatureContract.State,
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit
 ) {
+    val pullToRefreshState = rememberPullToRefreshState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -67,16 +72,24 @@ private fun TemperatureScreen(
     ) {
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                SyncLoadingIndicator()
             }
         }
 
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = onRefresh,
+            state = pullToRefreshState,
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            indicator = {
+                SyncPullToRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = state.isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

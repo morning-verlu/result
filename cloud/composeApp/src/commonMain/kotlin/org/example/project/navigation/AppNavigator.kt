@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -56,6 +57,8 @@ import cn.verlu.cloud.presentation.files.UploadItemStatus
 import cn.verlu.cloud.presentation.files.rememberFilePicker
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 private enum class AuthStep { Landing, Email, Password }
 
@@ -675,6 +678,7 @@ private data class ExplorerScreen(
         }
         val ui by explorerState.state.collectAsState()
         val snackbar = remember { SnackbarHostState() }
+        val explorerScope = rememberCoroutineScope()
 
         // 上传完成 / 删除 / 错误 Toast
         LaunchedEffect(ui.toast) {
@@ -702,6 +706,8 @@ private data class ExplorerScreen(
         var pendingDroppedFiles by remember { mutableStateOf<List<cn.verlu.cloud.presentation.files.FilePickResult>>(emptyList()) }
         var pendingSharedFiles by remember { mutableStateOf<List<cn.verlu.cloud.presentation.files.FilePickResult>>(emptyList()) }
         var fileDetailTarget by remember { mutableStateOf<CloudFileItem?>(null) }
+        var moveTargets by remember { mutableStateOf<List<CloudFileItem>>(emptyList()) }
+        var movePickerPrefix by remember { mutableStateOf("") }
         val desktop = isDesktopPlatform()
 
         val pickFile = rememberFilePicker { picks ->
@@ -753,6 +759,27 @@ private data class ExplorerScreen(
                     },
                     actions = {
                         if (selectedFileIds.isNotEmpty()) {
+                            val movableSelected =
+                                ui.files.any { selectedFileIds.contains(it.id) && !it.isDir }
+                            TextButton(
+                                onClick = {
+                                    val movable =
+                                        ui.files.filter { selectedFileIds.contains(it.id) && !it.isDir }
+                                    if (movable.isEmpty()) {
+                                        explorerScope.launch {
+                                            snackbar.showSnackbar("请选择要移动的文件（文件夹请取消勾选）")
+                                        }
+                                    } else {
+                                        moveTargets = movable
+                                        movePickerPrefix = ui.currentPrefix
+                                    }
+                                },
+                                enabled = movableSelected,
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("移动到")
+                            }
                             TextButton(
                                 onClick = {
                                     deleteTargets = ui.files.filter { selectedFileIds.contains(it.id) }
@@ -970,6 +997,14 @@ private data class ExplorerScreen(
                                         renameTarget = file
                                         renameText = file.fileName
                                     },
+                                    onMove = if (!file.isDir) {
+                                        {
+                                            moveTargets = listOf(file)
+                                            movePickerPrefix = ui.currentPrefix
+                                        }
+                                    } else {
+                                        null
+                                    },
                                     onDelete = { deleteTargets = listOf(file) },
                                 )
                                 HorizontalDivider(
@@ -1067,6 +1102,28 @@ private data class ExplorerScreen(
                             }
                         }
                     }
+                    if (ui.isMoving) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.2f),
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    tonalElevation = 6.dp,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp)
+                                        Spacer(Modifier.width(12.dp))
+                                        Text("正在移动文件…")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1097,6 +1154,108 @@ private data class ExplorerScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { renameTarget = null }) { Text("取消") }
+                },
+            )
+        }
+
+        if (moveTargets.isNotEmpty()) {
+            val destNorm = movePickerPrefix.trim().let { p ->
+                when {
+                    p.isEmpty() -> ""
+                    p.endsWith("/") -> p
+                    else -> "$p/"
+                }
+            }
+            val canConfirmMove = moveTargets.any { f ->
+                !f.isDir && (destNorm + f.fileName) != f.path
+            }
+            val folders = explorerState.foldersForMovePicker(movePickerPrefix)
+            AlertDialog(
+                onDismissRequest = { moveTargets = emptyList() },
+                title = { Text("移动到文件夹") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "将 ${moveTargets.size} 个文件移入所选路径。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = "目标：${
+                                if (movePickerPrefix.isEmpty()) {
+                                    "根目录"
+                                } else {
+                                    "/${movePickerPrefix.trimEnd('/')}"
+                                }
+                            }",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        TextButton(
+                            onClick = {
+                                movePickerPrefix = explorerState.parentOfDirPrefix(movePickerPrefix)
+                            },
+                            enabled = movePickerPrefix.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("上级目录")
+                        }
+                        Text(
+                            "点击文件夹进入子目录；在目标位置点「移到这里」。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(folders, key = { it.path }) { folder ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                                        .clickable { movePickerPrefix = folder.path }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        folder.fileName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        if (folders.isEmpty()) {
+                            Text(
+                                "当前路径下没有子文件夹；可将文件直接移入当前目录，或先返回上级再进入其他文件夹。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            explorerState.moveFilesToFolder(moveTargets, movePickerPrefix)
+                            moveTargets = emptyList()
+                            selectedFileIds = emptySet()
+                        },
+                        enabled = canConfirmMove,
+                    ) { Text("移到这里") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { moveTargets = emptyList() }) { Text("取消") }
                 },
             )
         }
@@ -1304,6 +1463,7 @@ private fun FileListItem(
     onDownload: () -> Unit,
     onShare: () -> Unit,
     onRename: () -> Unit,
+    onMove: (() -> Unit)?,
     onDelete: () -> Unit,
 ) {
     Row(
@@ -1357,6 +1517,16 @@ private fun FileListItem(
                         },
                         leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
                     )
+                    if (!file.isDir && onMove != null) {
+                        DropdownMenuItem(
+                            text = { Text("移动到…") },
+                            onClick = {
+                                menuExpanded = false
+                                onMove()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                        )
+                    }
                     if (!file.isDir) {
                         DropdownMenuItem(
                             text = { Text("下载") },
@@ -1402,6 +1572,11 @@ private fun FileListItem(
             }
             IconButton(onClick = onRename) {
                 Icon(Icons.Default.DriveFileRenameOutline, "重命名")
+            }
+            if (!file.isDir && onMove != null) {
+                IconButton(onClick = onMove) {
+                    Icon(Icons.Default.Folder, "移动到文件夹", tint = MaterialTheme.colorScheme.tertiary)
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)

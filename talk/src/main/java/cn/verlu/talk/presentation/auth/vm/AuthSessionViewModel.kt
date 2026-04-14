@@ -8,9 +8,11 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.user.UserInfo
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class AuthSessionState(
@@ -35,9 +37,11 @@ class AuthSessionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            supabase.auth.sessionStatus.collect { sessionStatus ->
+            var wasInitializing = true
+            supabase.auth.sessionStatus.collectLatest { sessionStatus ->
                 when (sessionStatus) {
                     is SessionStatus.Authenticated -> {
+                        wasInitializing = false
                         _state.value = AuthSessionState(
                             isInitializing = false,
                             isAuthenticated = true,
@@ -45,24 +49,20 @@ class AuthSessionViewModel @Inject constructor(
                         )
                     }
                     SessionStatus.Initializing -> {
+                        wasInitializing = true
                         _state.value = AuthSessionState(
                             isInitializing = true,
                             isAuthenticated = false,
                             user = null
                         )
                     }
-                    is SessionStatus.NotAuthenticated -> {
-                        _state.value = AuthSessionState(
-                            isInitializing = false,
-                            isAuthenticated = false,
-                            user = null
-                        )
-                    }
                     else -> {
+                        if (wasInitializing) delay(500)
+                        wasInitializing = false
                         _state.value = AuthSessionState(
                             isInitializing = false,
                             isAuthenticated = false,
-                            user = null
+                            user = null,
                         )
                     }
                 }

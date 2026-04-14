@@ -33,6 +33,12 @@ interface MessageRepository {
     suspend fun findDirectRoomIdForPeer(peerUserId: String): String?
 
     suspend fun sendMessage(roomId: String, content: String, type: String = "text")
+    suspend fun sendImageMessage(
+        roomId: String,
+        imageBytes: ByteArray,
+        contentType: String,
+        extension: String = "jpg",
+    )
     suspend fun softDeleteMessage(messageId: String)
     suspend fun markAllRead(roomId: String)
 }

@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
@@ -88,8 +88,9 @@ import cn.verlu.talk.presentation.contacts.QrScanFriendViewModel
 import cn.verlu.talk.presentation.home.HomeScreen
 import cn.verlu.talk.presentation.profile.ProfileQrDialog
 import cn.verlu.talk.presentation.profile.ProfileScreen
-import coil.compose.AsyncImage
-import kotlinx.coroutines.delay
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
+import coil3.compose.AsyncImage
+
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -169,10 +170,6 @@ fun TalkNavApp(modifier: Modifier = Modifier) {
             }
             return@LaunchedEffect
         }
-
-        // First check on cold start: wait briefly so PKCE session restore doesn't cause
-        // a flash to the Auth screen. LaunchedEffect is cancelled if isAuthenticated changes.
-        if (wasAuthenticated == null) delay(300)
 
         val current = backStack.lastOrNull()
         if (isAuthSubFlow(current)) return@LaunchedEffect
@@ -395,7 +392,7 @@ private fun AuthPasswordWithShell(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun HomeRouteWithShell(
     modifier: Modifier = Modifier,
@@ -470,9 +467,8 @@ private fun HomeRouteWithShell(
                     enabled = !qrState.isSending,
                 ) {
                     if (qrState.isSending) {
-                        CircularProgressIndicator(
+                        TalkLoadingIndicator(
                             modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Spacer(Modifier.width(8.dp))

@@ -47,9 +47,12 @@ fun WeatherRoute(
 
     var hasLocationPermission by remember { mutableStateOf(computeHasLocationPermission()) }
  
-    LaunchedEffect(state.error) {
+    LaunchedEffect(state.error, hasLocationPermission) {
         state.error?.let { err ->
-            snackbarHostState.showSnackbar(err)
+            val isPermissionRelated = err.contains("权限") || err.contains("定位")
+            if (!(!hasLocationPermission && isPermissionRelated)) {
+                snackbarHostState.showSnackbar(err)
+            }
             viewModel.dispatch(WeatherContract.Intent.DismissError)
         }
     }
@@ -69,6 +72,13 @@ fun WeatherRoute(
         hasLocationPermission = computeHasLocationPermission()
         if (hasLocationPermission) {
             viewModel.dispatch(WeatherContract.Intent.LocationPermissionResult(true))
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 

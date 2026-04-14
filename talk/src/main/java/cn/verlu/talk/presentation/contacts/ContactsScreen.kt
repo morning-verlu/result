@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.PeopleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,12 +36,17 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -52,11 +57,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.domain.model.Friendship
 import cn.verlu.talk.domain.model.Profile
 import cn.verlu.talk.presentation.navigation.LocalSnackbarHostState
-import coil.compose.AsyncImage
+import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
+import cn.verlu.talk.presentation.ui.TalkPullToRefreshIndicator
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ContactsScreen(
     modifier: Modifier = Modifier,
@@ -64,13 +71,29 @@ fun ContactsScreen(
     viewModel: ContactsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
     val snackbar: SnackbarHostState = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) {
         viewModel.navigateToChat.collect { roomId ->
             onNavigateToChat(roomId)
         }
+    }
+
+    LaunchedEffect(Unit) {
+        if (state.friends.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                if (state.friends.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 错误提示（如找不到聊天室）
@@ -122,9 +145,17 @@ fun ContactsScreen(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = viewModel::refresh,
+            state = pullToRefreshState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            indicator = {
+                TalkPullToRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = state.isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -180,7 +211,7 @@ private fun FriendListTab(
         ) {
             item(key = "loading") {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
+                    TalkLoadingIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "正在加载联系人…",
@@ -273,7 +304,7 @@ private fun PendingRequestsTab(
         ) {
             item(key = "loading") {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
+                    TalkLoadingIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "正在加载申请…",
@@ -421,9 +452,8 @@ private fun AddFriendDialog(
                     enabled = query.isNotBlank() && !isSearching && !addFriendSuccess,
                 ) {
                     if (isSearching) {
-                        CircularProgressIndicator(
+                        TalkLoadingIndicator(
                             modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {

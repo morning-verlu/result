@@ -10,6 +10,7 @@ import cn.verlu.talk.data.remote.dto.MessageDto
 import cn.verlu.talk.data.remote.dto.NewMessageDto
 import cn.verlu.talk.data.remote.dto.ProfileDto
 import cn.verlu.talk.data.remote.dto.toDomain
+import cn.verlu.talk.data.remote.SupabaseConfig
 import cn.verlu.talk.di.IoDispatcher
 import cn.verlu.talk.domain.model.Conversation
 import cn.verlu.talk.domain.model.Message
@@ -25,6 +26,8 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import io.github.jan.supabase.storage.storage
+import io.ktor.http.ContentType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +41,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.UUID
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.days
 
 private const val TAG = "Talk/MessageRepo"
 
@@ -332,6 +337,32 @@ class MessageRepositoryImpl @Inject constructor(
                 Log.d(TAG, "sendMessage: success")
             }.onFailure {
                 Log.e(TAG, "sendMessage: FAILED", it)
+                throw it
+            }
+        }
+    }
+
+    override suspend fun sendImageMessage(
+        roomId: String,
+        imageBytes: ByteArray,
+        contentType: String,
+        extension: String,
+    ) {
+        withContext(ioDispatcher) {
+            require(imageBytes.isNotEmpty()) { "图片内容为空" }
+            require(imageBytes.size <= 5 * 1024 * 1024) { "图片不能超过 5MB" }
+            val userId = currentUserId()
+            val safeExt = extension.lowercase().trim('.').ifBlank { "jpg" }
+            val objectPath = "owners/$userId/talk-images/$roomId/${System.currentTimeMillis()}-${UUID.randomUUID()}.$safeExt"
+            val bucket = supabase.storage.from(SupabaseConfig.STORAGE_BUCKET)
+            runCatching {
+                bucket.upload(objectPath, imageBytes) {
+                    this.contentType = ContentType.parse(contentType)
+                }
+                val signedUrl = bucket.createSignedUrl(objectPath, 365.days)
+                sendMessage(roomId = roomId, content = signedUrl, type = "image")
+            }.onFailure {
+                Log.e(TAG, "sendImageMessage: FAILED", it)
                 throw it
             }
         }

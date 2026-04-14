@@ -74,6 +74,13 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
+    fun refreshSilently() {
+        viewModelScope.launch {
+            runCatching { messageRepository.refreshConversations() }
+                .onFailure { e -> _state.update { it.copy(error = e.message) } }
+        }
+    }
+
     fun setSearchQuery(q: String) {
         _state.update { it.copy(searchQuery = q) }
     }

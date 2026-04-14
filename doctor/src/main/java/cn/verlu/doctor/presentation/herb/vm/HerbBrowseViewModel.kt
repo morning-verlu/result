@@ -1,5 +1,6 @@
 package cn.verlu.doctor.presentation.herb.vm
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.verlu.doctor.data.herb.HerbRepository
@@ -101,11 +102,9 @@ class HerbBrowseViewModel @Inject constructor(
                     }
                 },
                 onFailure = { e ->
+                    Log.e("Doctor/HerbBrowseVM", "refresh failed", e)
                     _state.update {
-                        it.copy(
-                            isRefreshing = false,
-                            error = e.herbUserVisibleError(),
-                        )
+                        it.copy(isRefreshing = false)
                     }
                 },
             )
@@ -131,11 +130,9 @@ class HerbBrowseViewModel @Inject constructor(
                     }
                 },
                 onFailure = { e ->
+                    Log.e("Doctor/HerbBrowseVM", "loadMore failed", e)
                     _state.update {
-                        it.copy(
-                            isAppending = false,
-                            error = e.herbUserVisibleError(),
-                        )
+                        it.copy(isAppending = false)
                     }
                 },
             )

@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.presentation.auth.vm.AuthSessionViewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 
 /**
  * 顶栏与「我的二维码」由 [cn.verlu.talk.presentation.navigation.TalkNavApp] 的 [ProfileRouteWithShell] 提供。

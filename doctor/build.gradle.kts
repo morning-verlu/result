@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.doctor"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.3"
+        versionCode = 4
+        versionName = "1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -82,7 +82,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.core.splashscreen)
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.35.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-coil2:0.35.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.39.2")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-coil3:0.39.2")
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }

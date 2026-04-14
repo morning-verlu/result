@@ -92,6 +92,13 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
+    fun refreshSilently() {
+        viewModelScope.launch {
+            runCatching { friendRepository.refreshFriends() }
+                .onFailure { e -> _state.update { it.copy(error = e.message) } }
+        }
+    }
+
     fun openChatWithPeer(peerUserId: String) {
         val friendship = _state.value.friends.find {
             it.requesterId == peerUserId || it.addresseeId == peerUserId

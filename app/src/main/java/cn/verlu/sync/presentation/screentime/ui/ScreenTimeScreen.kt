@@ -30,13 +30,16 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +62,7 @@ import cn.verlu.sync.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.sync.presentation.screentime.UsageAccessSettingsOpener
 import cn.verlu.sync.presentation.screentime.mvi.ScreenTimeContract
 import cn.verlu.sync.presentation.screentime.vm.ScreenTimeViewModel
+import cn.verlu.sync.presentation.ui.SyncPullToRefreshIndicator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -107,6 +111,7 @@ fun ScreenTimeRoute(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ScreenTimeScreen(
     state: ScreenTimeContract.State,
@@ -121,6 +126,7 @@ private fun ScreenTimeScreen(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
+    val pullToRefreshState = rememberPullToRefreshState()
 
     Column(
         modifier = modifier
@@ -157,9 +163,17 @@ private fun ScreenTimeScreen(
             PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = onRefresh,
+                state = pullToRefreshState,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                indicator = {
+                    SyncPullToRefreshIndicator(
+                        state = pullToRefreshState,
+                        isRefreshing = state.isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                },
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

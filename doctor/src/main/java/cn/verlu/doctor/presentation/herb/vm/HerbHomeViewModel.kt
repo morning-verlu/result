@@ -1,5 +1,6 @@
 package cn.verlu.doctor.presentation.herb.vm
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.verlu.doctor.data.herb.HerbRepository
@@ -75,7 +76,7 @@ class HerbHomeViewModel @Inject constructor(
                 true
             },
             onFailure = { e ->
-                _state.update { it.copy(error = e.herbUserVisibleError()) }
+                Log.e("Doctor/HerbHomeVM", "refreshSpotlight failed", e)
                 false
             },
         )

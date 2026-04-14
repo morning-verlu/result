@@ -47,6 +47,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -58,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -171,7 +173,7 @@ fun LocalMusicRoute(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LocalMusicScreen(
     viewModel: LocalMusicViewModel,
@@ -180,6 +182,7 @@ fun LocalMusicScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+    val pullToRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
 
     // SAF file picker for importing music files manually
@@ -359,9 +362,17 @@ fun LocalMusicScreen(
         PullToRefreshBox(
             isRefreshing = state.isLoading,
             onRefresh = { viewModel.loadMusic() },
+            state = pullToRefreshState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+            indicator = {
+                MusicPullToRefreshIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = state.isLoading,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
         ) {
             if (state.error != null && !state.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -26,6 +26,7 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.storage.Storage
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import javax.inject.Qualifier
@@ -59,6 +60,7 @@ object AppModule {
             install(Postgrest)
             install(Realtime)
             install(Functions)
+            install(Storage)
             httpConfig {
                 install(Logging) {
                     level = LogLevel.INFO

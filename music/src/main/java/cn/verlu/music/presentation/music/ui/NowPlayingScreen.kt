@@ -44,7 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,7 +66,7 @@ import cn.verlu.music.domain.lyrics.LrcParser
 import cn.verlu.music.domain.model.LocalAudio
 import cn.verlu.music.domain.player.PlaybackMode
 import cn.verlu.music.presentation.music.vm.LocalMusicViewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 
 @Composable
 fun NowPlayingRoute(
@@ -87,7 +86,6 @@ fun NowPlayingRoute(
 
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
-    var lyricOffsetMs by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(track?.id) {
         if (track == null) {
@@ -315,22 +313,10 @@ fun NowPlayingRoute(
                             Spacer(modifier = Modifier.height(16.dp))
                             LyricsSection(
                                 track = track,
-                                positionMs = displayedPositionMs + lyricOffsetMs,
+                                positionMs = displayedPositionMs,
                                 modifier = Modifier.weight(1f)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            LyricOffsetControls(
-                                offsetMs = lyricOffsetMs,
-                                onMinus = { lyricOffsetMs = (lyricOffsetMs - 500).coerceAtLeast(-5000) },
-                                onPlus = { lyricOffsetMs = (lyricOffsetMs + 500).coerceAtMost(5000) },
-                                onReset = { lyricOffsetMs = 0 }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            QueueSection(
-                                queue = playerState.queue,
-                                currentId = track.id
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
                             ProgressAndControls()
                         }
                     }
@@ -345,70 +331,16 @@ fun NowPlayingRoute(
                         TrackMeta()
                         LyricsSection(
                             track = track,
-                            positionMs = displayedPositionMs + lyricOffsetMs,
+                            positionMs = displayedPositionMs,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                        )
-                        LyricOffsetControls(
-                            offsetMs = lyricOffsetMs,
-                            onMinus = { lyricOffsetMs = (lyricOffsetMs - 500).coerceAtLeast(-5000) },
-                            onPlus = { lyricOffsetMs = (lyricOffsetMs + 500).coerceAtMost(5000) },
-                            onReset = { lyricOffsetMs = 0 }
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        QueueSection(
-                            queue = playerState.queue,
-                            currentId = track.id
                         )
                         ProgressAndControls()
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun LyricOffsetControls(
-    offsetMs: Int,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
-    onReset: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("歌词偏移: ${offsetMs}ms", style = MaterialTheme.typography.labelMedium)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMinus) { Text("-0.5s") }
-            IconButton(onClick = onReset) { Text("重置") }
-            IconButton(onClick = onPlus) { Text("+0.5s") }
-        }
-    }
-}
-
-@Composable
-private fun QueueSection(
-    queue: List<LocalAudio>,
-    currentId: Long
-) {
-    if (queue.isEmpty()) return
-    val preview = queue.take(8)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text("播放队列", style = MaterialTheme.typography.titleSmall)
-        preview.forEach { item ->
-            Text(
-                text = "${if (item.id == currentId) "▶ " else ""}${item.title}",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (item.id == currentId) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
