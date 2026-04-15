@@ -42,6 +42,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
@@ -75,6 +76,7 @@ fun ContactsScreen(
     val snackbar: SnackbarHostState = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val shouldVisibleRefresh = rememberUpdatedState(state.friends.isEmpty())
 
     LaunchedEffect(Unit) {
         viewModel.navigateToChat.collect { roomId ->
@@ -89,7 +91,7 @@ fun ContactsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
-                if (state.friends.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+                if (shouldVisibleRefresh.value) viewModel.refresh() else viewModel.refreshSilently()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -106,6 +108,7 @@ fun ContactsScreen(
         initialPage = state.selectedTabIndex.coerceIn(0, 1),
         pageCount = { 2 },
     )
+    val selectedTabIndex = pagerState.currentPage
 
     LaunchedEffect(state.selectedTabIndex) {
         val target = state.selectedTabIndex.coerceIn(0, 1)
@@ -115,7 +118,7 @@ fun ContactsScreen(
     }
 
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }
+        snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { page ->
                 if (page != state.selectedTabIndex) {
@@ -125,14 +128,14 @@ fun ContactsScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        PrimaryTabRow(selectedTabIndex = state.selectedTabIndex) {
+        PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
             Tab(
-                selected = state.selectedTabIndex == 0,
+                selected = selectedTabIndex == 0,
                 onClick = { viewModel.selectTab(0) },
                 text = { Text("好友") },
             )
             Tab(
-                selected = state.selectedTabIndex == 1,
+                selected = selectedTabIndex == 1,
                 onClick = { viewModel.selectTab(1) },
                 text = {
                     val n = state.pendingRequests.size

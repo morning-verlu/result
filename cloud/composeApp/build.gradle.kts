@@ -37,6 +37,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.splashscreen)
             implementation(libs.sqldelight.android.driver)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.datetime)

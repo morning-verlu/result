@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -67,6 +68,7 @@ fun ConversationListScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val shouldVisibleRefresh = rememberUpdatedState(state.conversations.isEmpty())
 
     LaunchedEffect(Unit) {
         if (state.conversations.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
@@ -75,7 +77,7 @@ fun ConversationListScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
-                if (state.conversations.isEmpty()) viewModel.refresh() else viewModel.refreshSilently()
+                if (shouldVisibleRefresh.value) viewModel.refresh() else viewModel.refreshSilently()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -135,7 +137,7 @@ fun ConversationListScreen(
                 },
             ) {
                 when {
-                    state.filtered.isEmpty() && state.isInitialLoading -> {
+                    state.conversations.isEmpty() && state.isInitialLoading -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Center,
@@ -155,7 +157,7 @@ fun ConversationListScreen(
                         }
                     }
 
-                    state.filtered.isEmpty() && !state.isRefreshing -> {
+                    state.conversations.isEmpty() && !state.isRefreshing -> {
                         // 空态也用可滚动容器承载，保证可以下拉刷新
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -166,6 +168,22 @@ fun ConversationListScreen(
                                 EmptyConversationsPlaceholder(
                                     modifier = Modifier.fillMaxWidth(),
                                     onAddFriend = onNavigateToContacts,
+                                )
+                            }
+                        }
+                    }
+
+                    state.filtered.isEmpty() -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            item(key = "search-empty") {
+                                Text(
+                                    "没有匹配的会话",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }

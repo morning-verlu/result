@@ -8,6 +8,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +58,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -64,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -108,6 +114,7 @@ fun ChatRoomScreen(
             }
         }
     }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
 
     // `First item` in a reverseLayout LazyColumn is anchored to the bottom (input side),
     // so the timeline opens on the latest messages with **no** scroll-from-top animation.
@@ -207,6 +214,7 @@ fun ChatRoomScreen(
                                     message = message,
                                     isMine = message.senderId == state.currentUserId,
                                     onDelete = { viewModel.deleteMessage(message.id) },
+                                    onImageClick = { url -> previewImageUrl = url },
                                 )
                             }
                             if (shouldShowTimeSeparator(message.createdAtMs, older?.createdAtMs)) {
@@ -224,6 +232,12 @@ fun ChatRoomScreen(
             onSend = viewModel::sendMessage,
             onPickImage = { imagePicker.launch(arrayOf("image/*")) },
             isSendingImage = state.isSendingImage,
+        )
+    }
+    previewImageUrl?.let { imageUrl ->
+        FullscreenImagePreview(
+            imageUrl = imageUrl,
+            onDismiss = { previewImageUrl = null },
         )
     }
 }
@@ -283,6 +297,7 @@ private fun MessageBubble(
     message: Message,
     isMine: Boolean,
     onDelete: () -> Unit,
+    onImageClick: (String) -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
@@ -332,7 +347,9 @@ private fun MessageBubble(
                         model = message.content,
                         contentDescription = "图片消息",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(190.dp),
+                        modifier = Modifier
+                            .size(190.dp)
+                            .clickable { onImageClick(message.content) },
                     )
                 } else if (sharePayload != null) {
                     CloudShareMessageCard(
@@ -380,6 +397,55 @@ private fun MessageBubble(
 
         if (isMine) {
             Spacer(modifier = Modifier.width(6.dp))
+        }
+    }
+}
+
+@Composable
+private fun FullscreenImagePreview(
+    imageUrl: String,
+    onDismiss: () -> Unit,
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.92f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "全屏图片预览",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                    // 吞掉单击，避免点击图片误触关闭预览
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = {})
+                    }
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            val nextScale = (scale * zoom).coerceIn(1f, 4f)
+                            scale = nextScale
+                            offset = if (nextScale <= 1.01f) {
+                                Offset.Zero
+                            } else {
+                                offset + pan
+                            }
+                        }
+                    }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+            )
         }
     }
 }

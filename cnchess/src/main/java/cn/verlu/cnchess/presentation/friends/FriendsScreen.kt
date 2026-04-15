@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -22,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -34,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -62,6 +65,27 @@ fun FriendsScreen(
         val err = state.error ?: return@LaunchedEffect
         snackbar.showSnackbar(err)
         viewModel.clearError()
+    }
+
+    state.pendingOutgoingInvite?.let { invite ->
+        val peerName = invite.toProfile?.displayName ?: "好友"
+        AlertDialog(
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+            onDismissRequest = { },
+            title = { Text("等待对方接受") },
+            text = {
+                Text(
+                    "已向 $peerName 发送对局邀请。对方接受后将自动进入棋盘。\n\n" +
+                        "您可随时取消邀请。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.cancelInvite(invite.toUserId) },
+                ) { Text("取消邀请") }
+            },
+        )
     }
 
     // Enter page: empty list uses normal refresh, otherwise silent refresh
@@ -111,17 +135,17 @@ fun FriendsScreen(
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(state.friends, key = { it.id }) { friendship ->
+                val peerId = friendship.peerProfile(userId)?.id.orEmpty()
                 FriendInviteItem(
                     friendship = friendship,
                     currentUserId = userId,
-                    invited = state.outgoingInviteToUserIds.contains(
-                        friendship.peerProfile(userId)?.id.orEmpty(),
-                    ),
-                    isOnline = state.onlinePeerUserIds.contains(
-                        friendship.peerProfile(userId)?.id.orEmpty(),
-                    ),
-                    onInvite = { peerId -> viewModel.invite(peerId) },
-                    onCancelInvite = { peerId -> viewModel.cancelInvite(peerId) },
+                    invited = state.outgoingInviteToUserIds.contains(peerId),
+                    waitingInDialog = state.pendingOutgoingInvite?.toUserId == peerId,
+                    isOnline = state.onlinePeerUserIds.contains(peerId),
+                    isInGame = state.inGamePeerUserIds.contains(peerId),
+                    isMyselfInGame = state.isMyselfInGame,
+                    onInvite = { id -> viewModel.invite(id) },
+                    onCancelInvite = { id -> viewModel.cancelInvite(id) },
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
             }
@@ -134,12 +158,31 @@ private fun FriendInviteItem(
     friendship: Friendship,
     currentUserId: String,
     invited: Boolean,
+    waitingInDialog: Boolean,
     isOnline: Boolean,
+    isInGame: Boolean,
+    isMyselfInGame: Boolean,
     onInvite: (String) -> Unit,
     onCancelInvite: (String) -> Unit,
 ) {
     val peer = friendship.peerProfile(currentUserId)
     val peerId = peer?.id ?: return
+
+    val statusText = when {
+        isInGame -> "对局中"
+        isOnline -> "在线"
+        else -> "离线"
+    }
+    val statusColor = when {
+        isInGame -> Color(0xFFFF9800)
+        isOnline -> Color(0xFF2ECC71)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val dotColor = when {
+        isInGame -> Color(0xFFFF9800)
+        isOnline -> Color(0xFF2ECC71)
+        else -> null
+    }
 
     Row(
         modifier = Modifier
@@ -156,13 +199,13 @@ private fun FriendInviteItem(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.secondaryContainer),
             )
-            if (isOnline) {
+            if (dotColor != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF2ECC71)),
+                        .background(dotColor),
                 )
             }
         }
@@ -174,27 +217,50 @@ private fun FriendInviteItem(
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = if (isOnline) "在线" else "离线",
+                text = statusText,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isOnline) Color(0xFF2ECC71) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = statusColor,
             )
         }
-        if (isOnline) {
-            if (invited) {
+        when {
+            !isOnline && !isInGame -> {
+                Text(
+                    text = "离线中",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            isInGame -> {
+                Text(
+                    text = "对局中",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFFF9800),
+                )
+            }
+            isMyselfInGame -> {
+                Text(
+                    text = "我在对局中",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            invited && waitingInDialog -> {
+                Text(
+                    text = "等待对方接受…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            invited -> {
                 OutlinedButton(onClick = { onCancelInvite(peerId) }) {
                     Text("取消邀请")
                 }
-            } else {
+            }
+            else -> {
                 Button(onClick = { onInvite(peerId) }) {
                     Text("邀请对局")
                 }
             }
-        } else {
-            Text(
-                text = "离线中",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

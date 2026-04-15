@@ -45,7 +45,15 @@ class ConversationListViewModel @Inject constructor(
     init {
         // Observe Room cache — instant, no spinner
         messageRepository.observeConversations()
-            .onEach { list -> _state.update { it.copy(conversations = list) } }
+            .onEach { list ->
+                _state.update { prev ->
+                    prev.copy(
+                        conversations = list,
+                        // 只要本地已有会话，进入页面就不应再显示「初始加载」动画。
+                        isInitialLoading = if (list.isNotEmpty()) false else prev.isInitialLoading,
+                    )
+                }
+            }
             .launchIn(viewModelScope)
 
         // 会话从存储恢复后再拉列表，否则易未登录/空表；首刷结束后再取消「初始加载中」

@@ -73,8 +73,8 @@ class GameViewModel @Inject constructor(
     private var boundGameId: String? = null
     private var autoReplayOnNextGame = false
 
-    // Track previous game state to detect transitions for sound events
-    private var prevMoveNo = -1L
+    // Track previous game state for terminal sounds; move/check sounds only advance monotonically in moveNo
+    private var lastSoundEmittedMoveNo = -1L
     private var prevStatus: ChessGameStatus? = null
 
     init {
@@ -88,6 +88,15 @@ class GameViewModel @Inject constructor(
                 }
                 val myUserId = if (mySide == Side.Red) game?.redUserId else game?.blackUserId
                 val opponentUserId = if (mySide == Side.Red) game?.blackUserId else game?.redUserId
+
+                if (game != null) {
+                    if (lastSoundEmittedMoveNo == -1L) {
+                        lastSoundEmittedMoveNo = game.moveNo
+                    } else if (game.moveNo < lastSoundEmittedMoveNo) {
+                        // 快照回退（例如失败回滚或乱序刷新）时同步，避免之后漏播或误播
+                        lastSoundEmittedMoveNo = game.moveNo
+                    }
+                }
 
                 // Detect sound events only when we have a previous reference point
                 if (game != null && prevStatus != null) {
@@ -109,17 +118,23 @@ class GameViewModel @Inject constructor(
                                 }
                             }
                         }
-                        game.status == ChessGameStatus.Active && prevMoveNo >= 0 && game.moveNo != prevMoveNo -> {
+                        game.status == ChessGameStatus.Active &&
+                            game.moveNo > lastSoundEmittedMoveNo -> {
                             val isCheck = RuleEngine.isInCheck(game.board, game.turnSide)
                             if (isCheck) ChessSoundEvent.CHECK else ChessSoundEvent.MOVE
                         }
                         else -> null
                     }
                     soundEvent?.let { _soundEvents.trySend(it) }
+                    if (soundEvent != null &&
+                        game.status == ChessGameStatus.Active &&
+                        (soundEvent == ChessSoundEvent.CHECK || soundEvent == ChessSoundEvent.MOVE)
+                    ) {
+                        lastSoundEmittedMoveNo = game.moveNo
+                    }
                 }
 
                 // Update tracking variables
-                prevMoveNo = game?.moveNo ?: -1L
                 prevStatus = game?.status
 
                 // Compute result banner info
@@ -250,7 +265,7 @@ class GameViewModel @Inject constructor(
     fun bind(gameId: String, startInReplayMode: Boolean = false) {
         autoReplayOnNextGame = startInReplayMode
         if (boundGameId == gameId) return
-        prevMoveNo = -1L
+        lastSoundEmittedMoveNo = -1L
         prevStatus = null
         boundGameId = gameId
         _state.value = GameUiState()
@@ -286,9 +301,29 @@ class GameViewModel @Inject constructor(
     }
 
     fun resign() {
+        val gid = boundGameId ?: return
         viewModelScope.launch {
-            runCatching { gameRepository.resign() }
+            runCatching { gameRepository.resign(gid) }
                 .onFailure { e -> _state.update { it.copy(error = e.message ?: "认输失败") } }
+        }
+    }
+
+    /**
+     * 先完成认输写入，再执行导航（例如返回首页）。避免先 pop 导致 unbind 后认输协程拿不到 gameId、对手端永远不收尾。
+     */
+    fun resignAndExit(onComplete: () -> Unit) {
+        val gid = boundGameId ?: return
+        viewModelScope.launch {
+            runCatching { gameRepository.resign(gid) }
+                .onSuccess { onComplete() }
+                .onFailure { e -> _state.update { it.copy(error = e.message ?: "认输失败") } }
+        }
+    }
+
+    /** 回到前台或 Realtime 异常时拉取最新棋局（对手认输等）。 */
+    fun refreshFromServer() {
+        viewModelScope.launch {
+            runCatching { gameRepository.refreshCurrentGame() }
         }
     }
 

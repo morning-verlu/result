@@ -35,8 +35,15 @@
 
 .package-picker {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
   gap: 8px;
+  width: 100%;
+}
+
+.package-picker > * {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input,
@@ -51,6 +58,8 @@ textarea {
   border: 1px solid #ccc;
   border-radius: 6px;
   padding: 8px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 button {

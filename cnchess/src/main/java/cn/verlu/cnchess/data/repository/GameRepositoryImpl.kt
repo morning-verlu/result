@@ -33,12 +33,15 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -81,7 +84,8 @@ private data class ChessGameUpdateDto(
 
 @Serializable
 private data class ChessResignUpdateDto(
-    val status: String = "resigned",
+    /** 必须无默认值，否则 kotlinx.serialization 在 encodeDefaults=false 时会省略，PATCH 不会改 status 列 */
+    val status: String,
     @SerialName("winner_user_id") val winnerUserId: String?,
     @SerialName("draw_offer_by_user_id") val drawOfferByUserId: String? = null,
     @SerialName("draw_offer_at") val drawOfferAt: String? = null,
@@ -97,8 +101,8 @@ private data class ChessDrawOfferUpdateDto(
 
 @Serializable
 private data class ChessDrawAcceptUpdateDto(
-    val status: String = "draw",
-    @SerialName("draw_reason") val drawReason: String = "mutual_agreement",
+    val status: String,
+    @SerialName("draw_reason") val drawReason: String,
     @SerialName("draw_offer_by_user_id") val drawOfferByUserId: String? = null,
     @SerialName("draw_offer_at") val drawOfferAt: String? = null,
     @SerialName("updated_at") val updatedAt: String,
@@ -123,6 +127,7 @@ class GameRepositoryImpl @Inject constructor(
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var gameId: String? = null
     private var activeChannel: RealtimeChannel? = null
+    private var fallbackSyncJob: Job? = null
 
     private fun currentUserId(): String? = supabase.auth.currentUserOrNull()?.id
 
@@ -146,7 +151,13 @@ class GameRepositoryImpl @Inject constructor(
         repoScope.launch { unbindGame() }
     }
 
+    override suspend fun refreshCurrentGame() {
+        refreshGame()
+    }
+
     private suspend fun cleanupChannel() {
+        fallbackSyncJob?.cancel()
+        fallbackSyncJob = null
         activeChannel?.let { ch ->
             runCatching { supabase.realtime.removeChannel(ch) }
         }
@@ -314,18 +325,32 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun resign(): Unit = withContext(ioDispatcher) {
-        val gid = gameId ?: error("game not bound")
+    override suspend fun resign(gameId: String?): Unit = withContext(ioDispatcher) {
+        val gid = gameId ?: this@GameRepositoryImpl.gameId ?: error("game not bound")
         val uid = currentUserId() ?: error("未登录")
+        val row = supabase.from("chess_games").select {
+            filter { eq("id", gid) }
+        }.decodeSingle<GameDto>()
+        if (row.status.lowercase() != "active") {
+            if (this@GameRepositoryImpl.gameId == gid) refreshGame()
+            return@withContext
+        }
+        val winnerUserId = if (row.redUserId == uid) row.blackUserId else row.redUserId
         supabase.from("chess_games").update(
             ChessResignUpdateDto(
-                winnerUserId = _gameState.value?.let { if (it.redUserId == uid) it.blackUserId else it.redUserId },
+                status = "resigned",
+                winnerUserId = winnerUserId,
                 updatedAt = Instant.now().toString(),
             ),
         ) {
-            filter { eq("id", gid) }
+            filter {
+                eq("id", gid)
+                eq("status", "active")
+            }
         }
-        refreshGame()
+        if (this@GameRepositoryImpl.gameId == gid) {
+            refreshGame()
+        }
     }
 
     override suspend fun offerDraw(): Unit = withContext(ioDispatcher) {
@@ -361,6 +386,8 @@ class GameRepositoryImpl @Inject constructor(
         if (accept) {
             supabase.from("chess_games").update(
                 ChessDrawAcceptUpdateDto(
+                    status = "draw",
+                    drawReason = "mutual_agreement",
                     updatedAt = now,
                 ),
             ) {
@@ -386,6 +413,40 @@ class GameRepositoryImpl @Inject constructor(
             }
         }
         refreshGame()
+    }
+
+    override suspend fun findActiveGame(): String? = withContext(ioDispatcher) {
+        val uid = currentUserId() ?: return@withContext null
+        runCatching {
+            supabase.from("chess_games").select {
+                filter {
+                    eq("status", "active")
+                    or {
+                        eq("red_user_id", uid)
+                        eq("black_user_id", uid)
+                    }
+                }
+                order("updated_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(1)
+            }.decodeList<GameDto>().firstOrNull()?.id
+        }.getOrNull()
+    }
+
+    override suspend fun getActiveOpponentIds(): Set<String> = withContext(ioDispatcher) {
+        val uid = currentUserId() ?: return@withContext emptySet()
+        runCatching {
+            supabase.from("chess_games").select {
+                filter {
+                    eq("status", "active")
+                    or {
+                        eq("red_user_id", uid)
+                        eq("black_user_id", uid)
+                    }
+                }
+            }.decodeList<GameDto>().map { g ->
+                if (g.redUserId == uid) g.blackUserId else g.redUserId
+            }.toSet()
+        }.getOrDefault(emptySet())
     }
 
     override suspend fun listRecentGames(limit: Int): List<GameHistoryItem> = withContext(ioDispatcher) {
@@ -472,6 +533,18 @@ class GameRepositoryImpl @Inject constructor(
             )
         }
 
+        val local = _gameState.value
+        val serverStatus = toStatus(game.status)
+        if (local != null &&
+            local.id == gid &&
+            local.status == ChessGameStatus.Active &&
+            serverStatus == ChessGameStatus.Active &&
+            local.moveNo > game.moveNo
+        ) {
+            // 乐观更新已领先于 DB 读到的快照时跳过覆盖，避免棋子回闪与音效重复触发
+            return@withContext
+        }
+
         _gameState.value = ChessGame(
             id = game.id,
             redUserId = game.redUserId,
@@ -509,6 +582,20 @@ class GameRepositoryImpl @Inject constructor(
             repoScope.launch { runCatching { refreshGame() } }
         }.launchIn(repoScope)
         repoScope.launch { channel.subscribe() }
+        startFallbackSync(gid)
+    }
+
+    /**
+     * Realtime 断连时，定期主动拉取当前对局，确保对手走子不会长期丢失。
+     */
+    private fun startFallbackSync(boundGameId: String) {
+        fallbackSyncJob?.cancel()
+        fallbackSyncJob = repoScope.launch {
+            while (isActive && gameId == boundGameId) {
+                delay(1_500)
+                runCatching { refreshGame() }
+            }
+        }
     }
 
     private suspend fun fetchProfiles(userIds: List<String>): Map<String, Profile> {

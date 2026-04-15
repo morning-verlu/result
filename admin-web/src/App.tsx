@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent, FormEvent } from 'react'
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import './App.css'
@@ -59,6 +59,14 @@ function createSupabaseOrNull(): SupabaseClient | null {
   return createClient(supabaseUrl, supabaseAnonKey)
 }
 
+function toFriendlyError(message: string): string {
+  const lower = message.toLowerCase()
+  if (lower.includes('row-level security')) {
+    return '操作失败：当前账号没有版本管理权限（RLS 拦截）。请将该账号加入 app_release_admins 后重试。'
+  }
+  return message
+}
+
 function App() {
   const supabase = useMemo(() => createSupabaseOrNull(), [])
   const [session, setSession] = useState<Session | null>(null)
@@ -79,6 +87,29 @@ function App() {
   const [forceUpdate, setForceUpdate] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null)
+  const [fileInputNonce, setFileInputNonce] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const latestReleaseByPackage = useMemo(() => {
+    const result = new Map<string, ReleaseRow>()
+    for (const row of releases) {
+      const key = row.package_name.trim()
+      const prev = result.get(key)
+      if (!prev) {
+        result.set(key, row)
+        continue
+      }
+      if (row.version_code > prev.version_code) {
+        result.set(key, row)
+        continue
+      }
+      if (row.version_code === prev.version_code && row.created_at > prev.created_at) {
+        result.set(key, row)
+      }
+    }
+    return result
+  }, [releases])
 
   useEffect(() => {
     if (!supabase) return
@@ -97,6 +128,21 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, session])
 
+  useEffect(() => {
+    const pkg = packageName.trim()
+    if (!pkg) return
+    if (editingReleaseId) return
+    const latest = latestReleaseByPackage.get(pkg)
+    if (!latest) return
+    setVersionCode(String(latest.version_code))
+    setVersionName(latest.version_name)
+    setTitle(latest.title || '版本更新')
+    setChangelog(latest.changelog || '')
+    setRolloutPercent(String(latest.rollout_percent))
+    setMinSupportedVersionCode(String(latest.min_supported_version_code))
+    setForceUpdate(latest.force_update)
+  }, [packageName, latestReleaseByPackage, editingReleaseId])
+
   async function loadReleases() {
     if (!supabase) return
     const { data, error: loadError } = await supabase
@@ -105,7 +151,7 @@ function App() {
       .order('created_at', { ascending: false })
       .limit(200)
     if (loadError) {
-      setError(loadError.message)
+      setError(toFriendlyError(loadError.message))
       return
     }
     setReleases((data ?? []) as ReleaseRow[])
@@ -120,7 +166,7 @@ function App() {
       email: email.trim(),
       password,
     })
-    if (loginError) setError(loginError.message)
+    if (loginError) setError(toFriendlyError(loginError.message))
     setBusy(false)
   }
 
@@ -135,7 +181,7 @@ function App() {
       },
     })
     if (oauthError) {
-      setError(oauthError.message)
+      setError(toFriendlyError(oauthError.message))
       setBusy(false)
     }
   }
@@ -143,56 +189,92 @@ function App() {
   async function handlePublish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!supabase || !session) return
-    if (!file) {
-      setError('请选择 APK 文件')
+    const selectedFile = file ?? fileInputRef.current?.files?.[0] ?? null
+    if (!editingReleaseId && !selectedFile) {
+      setError('请选择安装包文件')
       return
     }
     setBusy(true)
     setError(null)
-    const cleanFileName = file.name.replace(/\s+/g, '-')
-    const storagePath = `${packageName}/${versionCode}-${Date.now()}-${cleanFileName}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('app-releases')
-      .upload(storagePath, file, {
-        upsert: true,
-        contentType: file.type || guessMimeType(file.name),
-      })
-    if (uploadError) {
-      setBusy(false)
-      const raw = uploadError.message ?? ''
-      if (raw.toLowerCase().includes('exceeded the maximum allowed size')) {
-        setError(
-          '上传失败：当前 Supabase 项目全局上传上限可能低于文件大小（Free 计划常见为 50MB）。请在 Storage Settings 调整全局限制或升级套餐。',
-        )
-      } else {
-        setError(raw)
+    let downloadUrl: string | null = null
+    let fileSizeBytes: number | null = null
+    if (selectedFile) {
+      const cleanFileName = selectedFile.name.replace(/\s+/g, '-')
+      const storagePath = `${packageName}/${versionCode}-${Date.now()}-${cleanFileName}`
+      const { error: uploadError } = await supabase.storage
+        .from('app-releases')
+        .upload(storagePath, selectedFile, {
+          upsert: true,
+          contentType: selectedFile.type || guessMimeType(selectedFile.name),
+        })
+      if (uploadError) {
+        setBusy(false)
+        const raw = uploadError.message ?? ''
+        if (raw.toLowerCase().includes('exceeded the maximum allowed size')) {
+          setError(
+            '上传失败：当前 Supabase 项目全局上传上限可能低于文件大小（Free 计划常见为 50MB）。请在 Storage Settings 调整全局限制或升级套餐。',
+          )
+        } else {
+          setError(toFriendlyError(raw))
+        }
+        return
       }
-      return
+      const { data: urlData } = supabase.storage.from('app-releases').getPublicUrl(storagePath)
+      downloadUrl = urlData.publicUrl
+      fileSizeBytes = selectedFile.size
     }
 
-    const { data: urlData } = supabase.storage.from('app-releases').getPublicUrl(storagePath)
-
-    const { error: insertError } = await supabase.from('app_releases').insert({
+    const payload = {
       package_name: packageName.trim(),
       version_code: Number(versionCode),
       version_name: versionName.trim(),
       title: title.trim() || '版本更新',
       changelog: changelog.trim(),
-      download_url: urlData.publicUrl,
-      file_size_bytes: file.size,
       force_update: forceUpdate,
       min_supported_version_code: Number(minSupportedVersionCode),
       rollout_percent: Number(rolloutPercent),
+    } as Record<string, string | number | boolean>
+    if (downloadUrl) payload.download_url = downloadUrl
+    if (fileSizeBytes != null) payload.file_size_bytes = fileSizeBytes
+
+    if (editingReleaseId) {
+      if (downloadUrl) {
+        // Replace package file should behave like republish for tie-breaks.
+        payload.published_at = new Date().toISOString()
+      }
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('app_releases')
+        .update(payload)
+        .eq('id', editingReleaseId)
+        .select('id, download_url')
+      setBusy(false)
+      if (updateError) {
+        setError(toFriendlyError(updateError.message))
+        return
+      }
+      if (!updatedRows || updatedRows.length === 0) {
+        setError('保存失败：未更新到任何版本记录，请检查管理员权限或刷新后重试。')
+        return
+      }
+      setEditingReleaseId(null)
+      resetFilePicker()
+      await loadReleases()
+      return
+    }
+
+    const { error: insertError } = await supabase.from('app_releases').insert({
+      ...payload,
+      download_url: downloadUrl,
+      file_size_bytes: fileSizeBytes,
       enabled: true,
       created_by: session.user.id,
     })
     setBusy(false)
     if (insertError) {
-      setError(insertError.message)
+      setError(toFriendlyError(insertError.message))
       return
     }
-    setFile(null)
+    resetFilePicker()
     await loadReleases()
   }
 
@@ -210,6 +292,11 @@ function App() {
     }
     setError(null)
     setFile(selectedFile)
+  }
+
+  function resetFilePicker() {
+    setFile(null)
+    setFileInputNonce((v) => v + 1)
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -238,10 +325,72 @@ function App() {
       .eq('id', row.id)
     setBusy(false)
     if (updateError) {
-      setError(updateError.message)
+      setError(toFriendlyError(updateError.message))
       return
     }
     await loadReleases()
+  }
+
+  function extractStoragePathFromPublicUrl(downloadUrl: string): string | null {
+    const marker = '/storage/v1/object/public/app-releases/'
+    const idx = downloadUrl.indexOf(marker)
+    if (idx < 0) return null
+    const encodedPath = downloadUrl.slice(idx + marker.length)
+    if (!encodedPath) return null
+    return decodeURIComponent(encodedPath)
+  }
+
+  async function deleteRelease(row: ReleaseRow) {
+    if (!supabase) return
+    const ok = window.confirm(
+      `确认删除该版本？\n${row.package_name} ${row.version_name} (${row.version_code})\n此操作不可撤销。`,
+    )
+    if (!ok) return
+
+    setBusy(true)
+    setError(null)
+
+    const storagePath = extractStoragePathFromPublicUrl(row.download_url)
+    const { error: deleteError } = await supabase.from('app_releases').delete().eq('id', row.id)
+    if (deleteError) {
+      setBusy(false)
+      setError(toFriendlyError(deleteError.message))
+      return
+    }
+
+    // Best-effort cleanup for orphaned files; do not block successful row deletion.
+    if (storagePath) {
+      await supabase.storage.from('app-releases').remove([storagePath])
+    }
+
+    setBusy(false)
+    await loadReleases()
+  }
+
+  function startEdit(row: ReleaseRow) {
+    setEditingReleaseId(row.id)
+    setPackageName(row.package_name)
+    if (COMMON_PACKAGE_NAMES.includes(row.package_name as (typeof COMMON_PACKAGE_NAMES)[number])) {
+      setPackagePreset(row.package_name)
+    } else {
+      setPackagePreset('__custom__')
+    }
+    setVersionCode(String(row.version_code))
+    setVersionName(row.version_name)
+    setTitle(row.title || '版本更新')
+    setChangelog(row.changelog || '')
+    setRolloutPercent(String(row.rollout_percent))
+    setMinSupportedVersionCode(String(row.min_supported_version_code))
+    setForceUpdate(row.force_update)
+    resetFilePicker()
+    setError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingReleaseId(null)
+    resetFilePicker()
+    setError(null)
   }
 
   async function handleLogout() {
@@ -306,7 +455,7 @@ function App() {
       ) : (
         <>
           <form className="card form" onSubmit={handlePublish}>
-            <h2>发布新版本</h2>
+            <h2>{editingReleaseId ? '编辑版本' : '发布新版本'}</h2>
             <div className="grid">
               <label>
                 包名
@@ -392,10 +541,19 @@ function App() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <p>拖拽安装包到这里，或点击下方选择文件（apk/msi/dmg/deb/exe/zip）</p>
+              <p>
+                {editingReleaseId
+                  ? '拖拽或选择文件可替换安装包（不选则仅更新元数据）'
+                  : '拖拽安装包到这里，或点击下方选择文件（apk/msi/dmg/deb/exe/zip）'}
+              </p>
               <input
+                key={`release-file-${editingReleaseId ?? 'new'}-${fileInputNonce}`}
+                ref={fileInputRef}
                 type="file"
                 accept=".apk,.msi,.dmg,.deb,.exe,.zip"
+                onClick={(e) => {
+                  e.currentTarget.value = ''
+                }}
                 onChange={(e) => acceptReleaseFile(e.target.files?.[0] ?? null)}
               />
               <p className="file-name">
@@ -411,8 +569,13 @@ function App() {
               强制更新
             </label>
             <button type="submit" disabled={busy}>
-              上传并发布
+              {editingReleaseId ? '保存修改' : '上传并发布'}
             </button>
+            {editingReleaseId ? (
+              <button type="button" onClick={cancelEdit} disabled={busy}>
+                取消编辑
+              </button>
+            ) : null}
           </form>
           <datalist id="packageNameSuggestions">
             {COMMON_PACKAGE_NAMES.map((pkg) => (
@@ -451,8 +614,14 @@ function App() {
                     </td>
                     <td>{row.enabled ? '生效中' : '已停用'}</td>
                     <td>
+                      <button onClick={() => startEdit(row)} disabled={busy}>
+                        编辑
+                      </button>
                       <button onClick={() => toggleEnabled(row)} disabled={busy}>
                         {row.enabled ? '停用' : '启用'}
+                      </button>
+                      <button onClick={() => deleteRelease(row)} disabled={busy}>
+                        删除
                       </button>
                     </td>
                   </tr>

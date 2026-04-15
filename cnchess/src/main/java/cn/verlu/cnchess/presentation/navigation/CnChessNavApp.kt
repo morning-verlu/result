@@ -3,6 +3,7 @@ package cn.verlu.cnchess.presentation.navigation
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,7 +54,11 @@ import cn.verlu.cnchess.presentation.auth.vm.AuthEventManager
 import cn.verlu.cnchess.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.cnchess.presentation.friends.FriendsScreen
 import cn.verlu.cnchess.presentation.game.GameScreen
+import cn.verlu.cnchess.domain.model.ChessGameStatus
+import cn.verlu.cnchess.domain.model.GameHistoryItem
+import cn.verlu.cnchess.presentation.game.ActiveGameViewModel
 import cn.verlu.cnchess.presentation.history.GameHistoryScreen
+import cn.verlu.cnchess.presentation.ui.CnChessLoadingIndicator
 import cn.verlu.cnchess.presentation.invite.IncomingInviteDialog
 import cn.verlu.cnchess.presentation.invite.InviteListenerViewModel
 import cn.verlu.cnchess.presentation.update.AppUpdateGate
@@ -77,8 +82,10 @@ fun CnChessNavApp(modifier: Modifier = Modifier) {
 
     val authSessionVm: AuthSessionViewModel = hiltViewModel()
     val inviteVm: InviteListenerViewModel = hiltViewModel()
+    val activeGameVm: ActiveGameViewModel = hiltViewModel()
     val authState by authSessionVm.state.collectAsStateWithLifecycle()
     val inviteState by inviteVm.state.collectAsStateWithLifecycle()
+    val activeGameId by activeGameVm.activeGameId.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val showPasswordResetDialog by AuthEventManager.showPasswordResetDialog.collectAsStateWithLifecycle()
     var prevAuthenticated by remember { mutableStateOf<Boolean?>(null) }
@@ -102,6 +109,25 @@ fun CnChessNavApp(modifier: Modifier = Modifier) {
         while (true) {
             inviteVm.heartbeat()
             delay(20_000)
+        }
+    }
+
+    // After auth confirmed, trigger one-time active game check
+    LaunchedEffect(authState.isInitializing, authState.isAuthenticated) {
+        if (!authState.isInitializing && authState.isAuthenticated) {
+            activeGameVm.checkOnce()
+        }
+        if (!authState.isAuthenticated) {
+            activeGameVm.reset()
+        }
+    }
+
+    // If an active game is found, navigate to it (replacing home)
+    LaunchedEffect(activeGameId) {
+        val gid = activeGameId?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+        val current = backStack.lastOrNull()
+        if (current !is AppRoute.Game || current.gameId != gid) {
+            backStack.add(AppRoute.Game(gameId = gid, startInReplayMode = false))
         }
     }
 
@@ -164,6 +190,17 @@ fun CnChessNavApp(modifier: Modifier = Modifier) {
                     onReject = { inviteVm.rejectInvite(invite.id) },
                 )
             }
+            // Show loading overlay while checking for an active game after auth
+            val isCheckingActiveGame = authState.isAuthenticated && !authState.isInitializing && activeGameId == null
+            if (isCheckingActiveGame) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                ) {
+                    CnChessLoadingIndicator()
+                }
+            }
+
             NavDisplay(
                 backStack = backStack,
                 onBack = pop,
@@ -225,13 +262,17 @@ fun CnChessNavApp(modifier: Modifier = Modifier) {
                         GameHistoryRouteWithShell(
                             modifier = Modifier.fillMaxSize(),
                             onBack = pop,
-                            onOpenGame = { id -> backStack.add(AppRoute.Game(gameId = id, startInReplayMode = true)) },
+                            onOpenGame = { item ->
+                                val replay = item.status != ChessGameStatus.Active
+                                backStack.add(AppRoute.Game(gameId = item.gameId, startInReplayMode = replay))
+                            },
                         )
                     }
                     entry<AppRoute.Game> { route ->
                         GameRouteWithShell(
                             gameId = route.gameId,
                             startInReplayMode = route.startInReplayMode,
+                            onBack = pop,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -387,7 +428,7 @@ private fun HomeRouteWithShell(
 private fun GameHistoryRouteWithShell(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
-    onOpenGame: (String) -> Unit,
+    onOpenGame: (GameHistoryItem) -> Unit,
 ) {
     Scaffold(
         modifier = modifier,
@@ -418,6 +459,7 @@ private fun GameHistoryRouteWithShell(
 private fun GameRouteWithShell(
     gameId: String,
     startInReplayMode: Boolean,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -428,6 +470,7 @@ private fun GameRouteWithShell(
         GameScreen(
             gameId = gameId,
             startInReplayMode = startInReplayMode,
+            onBack = onBack,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),

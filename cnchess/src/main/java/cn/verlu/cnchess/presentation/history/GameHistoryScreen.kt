@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,19 +32,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.cnchess.domain.model.GameHistoryItem
 import cn.verlu.cnchess.presentation.navigation.LocalSnackbarHostState
 import cn.verlu.cnchess.presentation.ui.CnChessLoadingIndicator
+import cn.verlu.cnchess.presentation.ui.CnChessPullToRefreshIndicator
 import coil3.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameHistoryScreen(
     modifier: Modifier = Modifier,
-    onOpenGame: (String) -> Unit,
+    /** 已结束对局默认进入复盘；进行中的对局应进入实战以便继续走子。 */
+    onOpenGame: (GameHistoryItem) -> Unit,
     viewModel: GameHistoryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = LocalSnackbarHostState.current
+    val pullToRefreshState = rememberPullToRefreshState()
 
     LaunchedEffect(state.error) {
         val err = state.error ?: return@LaunchedEffect
@@ -49,7 +56,7 @@ fun GameHistoryScreen(
         viewModel.clearError()
     }
 
-    if (state.isLoading) {
+    if (state.isLoading && state.items.isEmpty()) {
         Column(
             modifier = modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -60,21 +67,35 @@ fun GameHistoryScreen(
         return
     }
 
-    if (state.items.isEmpty()) {
-        Column(
-            modifier = modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("暂无对局历史")
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = viewModel::refresh,
+        state = pullToRefreshState,
+        modifier = modifier.fillMaxSize(),
+        indicator = {
+            CnChessPullToRefreshIndicator(
+                state = pullToRefreshState,
+                isRefreshing = state.isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+    ) {
+        if (state.items.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("暂无对局历史")
+            }
+            return@PullToRefreshBox
         }
-        return
-    }
 
-    LazyColumn(modifier = modifier.fillMaxSize()) {
-        items(state.items, key = { it.gameId }) { item ->
-            HistoryItem(item = item, onClick = { onOpenGame(item.gameId) })
-            HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            items(state.items, key = { it.gameId }) { item ->
+                HistoryItem(item = item, onClick = { onOpenGame(item) })
+                HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+            }
         }
     }
 }

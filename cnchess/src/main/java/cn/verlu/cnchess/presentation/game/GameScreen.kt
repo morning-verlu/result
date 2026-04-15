@@ -24,6 +24,8 @@ import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,12 +33,19 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,12 +76,16 @@ import coil3.compose.AsyncImage
 fun GameScreen(
     gameId: String,
     startInReplayMode: Boolean = false,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: GameViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
+    var showResignOnBackDialog by remember { mutableStateOf(false) }
+    var showResignDialog by remember { mutableStateOf(false) }
+    var showDrawDialog by remember { mutableStateOf(false) }
 
     // Sound effects
     val soundManager = remember { ChessSoundManager() }
@@ -89,8 +102,77 @@ fun GameScreen(
         }
     }
 
+    val isGameActive = state.game?.status == ChessGameStatus.Active
+
+    // Intercept back when game is active and not in replay – resign confirmation
+    BackHandler(enabled = isGameActive && !state.isReplayMode) {
+        showResignOnBackDialog = true
+    }
+
+    // Resign-on-back dialog
+    if (showResignOnBackDialog) {
+        AlertDialog(
+            onDismissRequest = { showResignOnBackDialog = false },
+            title = { Text("退出对局") },
+            text = { Text("退出将视为认输，对局立即结束。确认退出吗？") },
+            confirmButton = {
+                Button(onClick = {
+                    showResignOnBackDialog = false
+                    viewModel.resignAndExit(onBack)
+                }) { Text("确认退出") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showResignOnBackDialog = false }) { Text("继续下棋") }
+            },
+        )
+    }
+
+    // Resign confirmation dialog
+    if (showResignDialog) {
+        AlertDialog(
+            onDismissRequest = { showResignDialog = false },
+            title = { Text("确认认输") },
+            text = { Text("确认认输？对局将立即结束，你方判负。") },
+            confirmButton = {
+                Button(onClick = {
+                    showResignDialog = false
+                    viewModel.resignAndExit(onBack)
+                }) { Text("确认认输") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showResignDialog = false }) { Text("取消") }
+            },
+        )
+    }
+
+    // Draw offer confirmation dialog
+    if (showDrawDialog) {
+        AlertDialog(
+            onDismissRequest = { showDrawDialog = false },
+            title = { Text("提议和棋") },
+            text = { Text("确认向对手发出和棋提议？对手同意后对局以和棋结束。") },
+            confirmButton = {
+                Button(onClick = { showDrawDialog = false; viewModel.requestDraw() }) { Text("确认提议") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDrawDialog = false }) { Text("取消") }
+            },
+        )
+    }
+
     LaunchedEffect(gameId) {
         viewModel.bind(gameId, startInReplayMode = startInReplayMode)
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, gameId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.refreshFromServer()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(state.error) {
         val err = state.error ?: return@LaunchedEffect
@@ -98,7 +180,8 @@ fun GameScreen(
         viewModel.clearError()
     }
 
-    if (state.isLoading || state.game == null) {
+    val gameMatches = state.game?.id == gameId
+    if (state.isLoading || state.game == null || !gameMatches) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CnChessLoadingIndicator()
         }
@@ -125,6 +208,26 @@ fun GameScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top,
             ) {
+                val resultBanner = state.resultBannerText
+                if (isGameOver && resultBanner != null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = when (state.isWin) {
+                            true -> MaterialTheme.colorScheme.primaryContainer
+                            false -> MaterialTheme.colorScheme.errorContainer
+                            null -> MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(
+                            text = resultBanner,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
                 PlayerHeader(
                     profile = state.opponentProfile,
                     side = state.mySide.opposite(),
@@ -166,11 +269,11 @@ fun GameScreen(
                                     }
                                     state.isPendingDrawOffer -> {
                                         Button(onClick = {}, enabled = false) { Text("等待响应") }
-                                        Button(onClick = viewModel::resign) { Text("认输") }
+                                        Button(onClick = { showResignDialog = true }) { Text("认输") }
                                     }
                                     else -> {
-                                        Button(onClick = viewModel::requestDraw) { Text("和棋") }
-                                        Button(onClick = viewModel::resign) { Text("认输") }
+                                        Button(onClick = { showDrawDialog = true }) { Text("和棋") }
+                                        Button(onClick = { showResignDialog = true }) { Text("认输") }
                                     }
                                 }
                             }
@@ -387,7 +490,7 @@ private fun BoardView(
                 drawLine(lineColor, logicalCornerToOffset(7, 5), logicalCornerToOffset(9, 3), palaceStroke)
 
                 // Legal move rings
-                val ringR = min(dx, dy) * 0.14f
+                val ringR = min(dx, dy) * 0.16f
                 val ringStroke = Stroke(width = min(dx, dy) * 0.045f)
                 legalTargets.forEach { pos ->
                     if (board.at(pos) != null) return@forEach
@@ -408,12 +511,14 @@ private fun BoardView(
                     val inLast = lastMove?.from == logical || lastMove?.to == logical
                     val highlight = selectedHere || inLast
                     val legalDestination = legalTargets.contains(logical)
+                    val pieceFrac = 0.92f
+                    val halfFrac = pieceFrac / 2f
                     PieceChip(
                         piece = piece,
                         modifier = Modifier
-                            .size(cell * 0.78f)
+                            .size(cell * pieceFrac)
                             .align(Alignment.TopStart)
-                            .offset(x = left - (cell * 0.39f), y = top - (rowStep * 0.39f)),
+                            .offset(x = left - (cell * halfFrac), y = top - (rowStep * halfFrac)),
                         highlight = highlight,
                         legalMoveDestination = legalDestination,
                     )
@@ -455,6 +560,7 @@ private fun PieceChip(
         Text(
             text = pieceLabel(piece),
             color = pieceColor,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -470,6 +576,13 @@ private fun centerStatusText(state: GameUiState): String? {
     state.judgeHint?.let { return it }
     if (game.status == ChessGameStatus.Active) return "您${myPrefix} · ${state.statusText}"
     if (game.status == ChessGameStatus.Draw) return "您${myPrefix}和棋"
+    if (game.status == ChessGameStatus.Resigned) {
+        return when {
+            game.winnerUserId == myUserId -> "对手认输，你赢了"
+            game.winnerUserId != null -> "你已认输"
+            else -> "认输结束"
+        }
+    }
 
     return if (game.winnerUserId != null) {
         val isWin = game.winnerUserId == myUserId

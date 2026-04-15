@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 
 data class GameHistoryState(
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val items: List<GameHistoryItem> = emptyList(),
     val error: String? = null,
 )
@@ -26,19 +27,32 @@ class GameHistoryViewModel @Inject constructor(
     private val _state = MutableStateFlow(GameHistoryState())
     val state: StateFlow<GameHistoryState> = _state.asStateFlow()
 
+    private var initialLoadDone = false
+
     init {
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            _state.update { s ->
+                val showBlocking = !initialLoadDone && s.items.isEmpty()
+                if (showBlocking) {
+                    s.copy(isLoading = true, isRefreshing = false, error = null)
+                } else {
+                    s.copy(isRefreshing = true, error = null)
+                }
+            }
             runCatching { gameRepository.listRecentGames() }
                 .onSuccess { list ->
-                    _state.update { it.copy(isLoading = false, items = list) }
+                    initialLoadDone = true
+                    _state.update { it.copy(isLoading = false, isRefreshing = false, items = list) }
                 }
                 .onFailure { e ->
-                    _state.update { it.copy(isLoading = false, error = e.message ?: "加载历史失败") }
+                    initialLoadDone = true
+                    _state.update {
+                        it.copy(isLoading = false, isRefreshing = false, error = e.message ?: "加载历史失败")
+                    }
                 }
         }
     }

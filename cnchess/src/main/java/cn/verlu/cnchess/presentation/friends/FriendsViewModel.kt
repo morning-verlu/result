@@ -3,8 +3,10 @@ package cn.verlu.cnchess.presentation.friends
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.verlu.cnchess.data.repository.FriendRepository
+import cn.verlu.cnchess.data.repository.GameRepository
 import cn.verlu.cnchess.data.repository.InviteRepository
 import cn.verlu.cnchess.data.repository.PresenceRepository
+import cn.verlu.cnchess.domain.model.ChessInvite
 import cn.verlu.cnchess.domain.model.Friendship
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.SupabaseClient
@@ -22,7 +24,11 @@ data class FriendsUiState(
     val isRefreshing: Boolean = false,
     val friends: List<Friendship> = emptyList(),
     val onlinePeerUserIds: Set<String> = emptySet(),
+    val inGamePeerUserIds: Set<String> = emptySet(),
     val outgoingInviteToUserIds: Set<String> = emptySet(),
+    /** 当前待对方接受的邀请（用于弹窗）；有多条时取最近一条 */
+    val pendingOutgoingInvite: ChessInvite? = null,
+    val isMyselfInGame: Boolean = false,
     val error: String? = null,
 )
 
@@ -31,6 +37,7 @@ class FriendsViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
     private val inviteRepository: InviteRepository,
     private val presenceRepository: PresenceRepository,
+    private val gameRepository: GameRepository,
     private val supabase: SupabaseClient,
 ) : ViewModel() {
 
@@ -40,15 +47,20 @@ class FriendsViewModel @Inject constructor(
     init {
         friendRepository.friends
             .combine(inviteRepository.outgoingPendingInvites) { friends, outgoing ->
-                friends to outgoing.map { it.toUserId }.toSet()
+                Triple(
+                    friends,
+                    outgoing.map { it.toUserId }.toSet(),
+                    outgoing.firstOrNull(),
+                )
             }.let { flow ->
                 viewModelScope.launch {
-                    flow.collect { (friends, outgoingUserIds) ->
+                    flow.collect { (friends, outgoingUserIds, firstOutgoing) ->
                         _state.update {
                             it.copy(
                                 isLoading = false,
                                 friends = friends,
                                 outgoingInviteToUserIds = outgoingUserIds,
+                                pendingOutgoingInvite = firstOutgoing,
                             )
                         }
                         refreshOnlineStatuses(friends)
@@ -126,14 +138,23 @@ class FriendsViewModel @Inject constructor(
     private fun refreshOnlineStatuses(friends: List<Friendship>) {
         val currentUserId = supabase.auth.currentUserOrNull()?.id ?: return
         viewModelScope.launch {
+            val peerIds = friends.mapNotNull { it.peerProfile(currentUserId)?.id }
             val onlineIds = buildSet {
-                friends.forEach { friendship ->
-                    val peerId = friendship.peerProfile(currentUserId)?.id ?: return@forEach
+                peerIds.forEach { peerId ->
                     val online = runCatching { presenceRepository.isUserOnline(peerId) }.getOrDefault(false)
                     if (online) add(peerId)
                 }
             }
-            _state.update { it.copy(onlinePeerUserIds = onlineIds) }
+            val activeOpponents = runCatching { gameRepository.getActiveOpponentIds() }.getOrDefault(emptySet())
+            val inGamePeerUserIds = peerIds.filter { activeOpponents.contains(it) }.toSet()
+            val isMyselfInGame = activeOpponents.isNotEmpty()
+            _state.update {
+                it.copy(
+                    onlinePeerUserIds = onlineIds,
+                    inGamePeerUserIds = inGamePeerUserIds,
+                    isMyselfInGame = isMyselfInGame,
+                )
+            }
         }
     }
 

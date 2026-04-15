@@ -1,5 +1,10 @@
 package cn.verlu.talk.presentation.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -20,18 +25,33 @@ fun HomeScreen(
     onNavigateToContacts: () -> Unit = {},
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        when (selectedTab) {
-            0 -> ConversationListScreen(
-                modifier = Modifier.fillMaxSize(),
-                onNavigateToChat = onNavigateToChat,
-                onNavigateToContacts = onNavigateToContacts,
-            )
+        AnimatedContent(
+            targetState = selectedTab,
+            label = "TalkHomeTabSwitch",
+            transitionSpec = {
+                val forward = targetState > initialState
+                slideInHorizontally(
+                    animationSpec = tween(220),
+                    initialOffsetX = { if (forward) it else -it },
+                ) togetherWith slideOutHorizontally(
+                    animationSpec = tween(220),
+                    targetOffsetX = { if (forward) -it else it },
+                )
+            },
+        ) { tab ->
+            when (tab) {
+                0 -> ConversationListScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onNavigateToChat = onNavigateToChat,
+                    onNavigateToContacts = onNavigateToContacts,
+                )
 
-            else -> ContactsScreen(
-                modifier = Modifier.fillMaxSize(),
-                onNavigateToChat = onNavigateToChat,
-                viewModel = contactsViewModel,
-            )
+                else -> ContactsScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onNavigateToChat = onNavigateToChat,
+                    viewModel = contactsViewModel,
+                )
+            }
         }
     }
 }

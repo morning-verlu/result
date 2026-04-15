@@ -11,6 +11,7 @@ import cn.verlu.cnchess.util.parseTimestampToMs
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
@@ -51,6 +52,9 @@ private data class NewGameDto(
     val black_user_id: String,
     val status: String = "active",
 )
+
+@Serializable
+private data class ActiveGameIdDto(val id: String)
 
 @Singleton
 class InviteRepositoryImpl @Inject constructor(
@@ -142,9 +146,26 @@ class InviteRepositoryImpl @Inject constructor(
         activeChannel = null
     }
 
+    private suspend fun hasActiveGame(userId: String): Boolean {
+        return runCatching {
+            supabase.from("chess_games").select(columns = Columns.list("id")) {
+                filter {
+                    eq("status", "active")
+                    or {
+                        eq("red_user_id", userId)
+                        eq("black_user_id", userId)
+                    }
+                }
+                limit(1)
+            }.decodeList<ActiveGameIdDto>().isNotEmpty()
+        }.getOrDefault(false)
+    }
+
     override suspend fun sendInvite(toUserId: String): Unit = withContext(ioDispatcher) {
         val fromUserId = currentUserId() ?: error("未登录")
         if (fromUserId == toUserId) error("不能邀请自己")
+        if (hasActiveGame(fromUserId)) error("你当前有进行中的对局，请先结束再邀请")
+        if (hasActiveGame(toUserId)) error("对方当前有进行中的对局，无法邀请")
         val online = presenceRepository.isUserOnline(toUserId)
         if (!online) error("对方当前不在线，暂时无法邀请")
 

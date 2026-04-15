@@ -66,13 +66,23 @@ private enum class AuthStep { Landing, Email, Password }
 private val LocalAuthGate = staticCompositionLocalOf<AuthGateState> { error("LocalAuthGate not provided") }
 private val LocalAppGraph = staticCompositionLocalOf<AppGraph> { error("LocalAppGraph not provided") }
 
+/** 会话恢复完成前显示，避免先闪登录页再进网盘（与 Talk/Sync 启动策略一致）。 */
+private data object SessionLoadingScreen : Screen {
+    @Composable
+    override fun Content() {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    }
+}
+
 @Composable
 fun CloudAppRoot(graph: AppGraph) {
     val gate = remember(graph) { AuthGateState(graph.authUseCases) }
     val session by gate.session.collectAsState()
 
     CompositionLocalProvider(LocalAuthGate provides gate, LocalAppGraph provides graph) {
-        Navigator(AuthScreen) { navigator ->
+        Navigator(SessionLoadingScreen) { navigator ->
             LaunchedEffect(Unit) {
                 AuthDeepLinkBus.links.collect { url ->
                     gate.handleDeepLink(url)
@@ -81,12 +91,15 @@ fun CloudAppRoot(graph: AppGraph) {
             LaunchedEffect(session.isInitializing, session.isAuthenticated) {
                 if (session.isInitializing) return@LaunchedEffect
                 val current = navigator.lastItem
-                val onAuth = current is AuthScreen
-                if (session.isAuthenticated && onAuth) {
+                if (session.isAuthenticated) {
                     val ownerId = session.user?.id.orEmpty()
-                    navigator.replaceAll(ExplorerScreen(ownerId))
-                } else if (!session.isAuthenticated && !onAuth) {
-                    navigator.replaceAll(AuthScreen)
+                    if (ownerId.isNotEmpty() && current !is ExplorerScreen) {
+                        navigator.replaceAll(ExplorerScreen(ownerId))
+                    }
+                } else {
+                    if (current !is AuthScreen) {
+                        navigator.replaceAll(AuthScreen)
+                    }
                 }
             }
             CurrentScreen()
@@ -1614,15 +1627,6 @@ private fun formatUpdatedAt(epochMs: Long): String {
         else -> "较久以前"
     }
     return "$relative（$epochMs）"
-}
-
-private data object LoadingScreen : Screen {
-    @Composable
-    override fun Content() {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
