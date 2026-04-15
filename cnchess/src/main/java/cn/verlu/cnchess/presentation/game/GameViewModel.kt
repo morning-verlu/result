@@ -203,14 +203,20 @@ class GameViewModel @Inject constructor(
                         it.isReplayMode -> it.replayBoard
                         else -> null
                     }
+                    val nowWall = System.currentTimeMillis()
+                    val (redShow, blackShow) = when {
+                        game == null -> 0L to 0L
+                        game.status != ChessGameStatus.Active || it.isReplayMode -> game.redTimeMs to game.blackTimeMs
+                        else -> liveRedBlackRemaining(game, nowWall)
+                    }
                     it.copy(
                         isLoading = game == null,
                         game = game,
                         mySide = mySide,
                         myProfile = game?.myProfile,
                         opponentProfile = game?.opponentProfile,
-                        localMyTimeMs = if (mySide == Side.Red) game?.redTimeMs ?: 0L else game?.blackTimeMs ?: 0L,
-                        localOpponentTimeMs = if (mySide == Side.Red) game?.blackTimeMs ?: 0L else game?.redTimeMs ?: 0L,
+                        localMyTimeMs = if (mySide == Side.Red) redShow else blackShow,
+                        localOpponentTimeMs = if (mySide == Side.Red) blackShow else redShow,
                         totalMyTimeMs = when {
                             it.totalMyTimeMs > 0L -> it.totalMyTimeMs
                             mySide == Side.Red -> game?.redTimeMs ?: 0L
@@ -448,12 +454,31 @@ class GameViewModel @Inject constructor(
         val game = _state.value.game ?: return
         if (game.status != ChessGameStatus.Active) return
         if (_state.value.isReplayMode) return
-        val myTurn = game.turnSide == _state.value.mySide
-        if (myTurn) {
-            _state.update { it.copy(localMyTimeMs = (it.localMyTimeMs - 1_000).coerceAtLeast(0L)) }
-        } else {
-            _state.update { it.copy(localOpponentTimeMs = (it.localOpponentTimeMs - 1_000).coerceAtLeast(0L)) }
+        val now = System.currentTimeMillis()
+        val (redShow, blackShow) = liveRedBlackRemaining(game, now)
+        _state.update {
+            it.copy(
+                localMyTimeMs = if (it.mySide == Side.Red) redShow else blackShow,
+                localOpponentTimeMs = if (it.mySide == Side.Red) blackShow else redShow,
+            )
         }
+    }
+
+    /** 行棋方：剩余 = 快照值 − 自 [ChessGame.lastMoveAtMs]/[ChessGame.createdAtMs] 起的用时；非行棋方为快照值（已停表）。 */
+    private fun liveRedBlackRemaining(game: ChessGame, nowMs: Long): Pair<Long, Long> {
+        val t0 = game.lastMoveAtMs ?: game.createdAtMs ?: nowMs
+        val elapsed = (nowMs - t0).coerceIn(0L, 86_400_000L)
+        val red = if (game.turnSide == Side.Red) {
+            (game.redTimeMs - elapsed).coerceAtLeast(0L)
+        } else {
+            game.redTimeMs
+        }
+        val black = if (game.turnSide == Side.Black) {
+            (game.blackTimeMs - elapsed).coerceAtLeast(0L)
+        } else {
+            game.blackTimeMs
+        }
+        return red to black
     }
 
     private fun statusText(game: ChessGame?, mySide: Side): String {

@@ -22,6 +22,7 @@ import cn.verlu.cnchess.util.parseTimestampToMs
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
@@ -46,6 +47,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 private data class ChessMoveInsertDto(
@@ -175,7 +178,9 @@ class GameRepositoryImpl @Inject constructor(
         val applied = RuleEngine.tryApplyMove(current.board, side, from, to) ?: error("非法走子")
         val nextBoard = applied.first
         val moved = applied.second
-        val spentMs = 1_000L
+        val nowMs = System.currentTimeMillis()
+        val clockStartMs = current.lastMoveAtMs ?: current.createdAtMs ?: nowMs
+        val spentMs = (nowMs - clockStartMs).coerceIn(0L, 86_400_000L)
         val nextTurn = side.opposite()
         val now = Instant.now().toString()
         val annotation = RuleEngine.buildMoveAnnotation(
@@ -196,20 +201,22 @@ class GameRepositoryImpl @Inject constructor(
             )
         }
 
+        val moverRem = if (side == Side.Red) current.redTimeMs else current.blackTimeMs
+        if (spentMs > moverRem) {
+            syncTimeoutIfDue(gid)
+            refreshGame()
+            error("超时判负")
+        }
         val nextRedTime = if (side == Side.Red) (current.redTimeMs - spentMs).coerceAtLeast(0L) else current.redTimeMs
         val nextBlackTime = if (side == Side.Black) (current.blackTimeMs - spentMs).coerceAtLeast(0L) else current.blackTimeMs
         val result = RuleEngine.evaluateResult(nextBoard, nextTurn)
         val endedByRule = result != GameResult.Ongoing
-        val timedOut = nextRedTime <= 0L || nextBlackTime <= 0L
         val nextStatus = when {
-            timedOut -> "timeout"
             decision.drawReason != null -> "draw"
             endedByRule -> "finished"
             else -> "active"
         }
         val winner = when {
-            timedOut && nextRedTime <= 0L -> current.blackUserId
-            timedOut && nextBlackTime <= 0L -> current.redUserId
             result == GameResult.RedWin -> current.redUserId
             result == GameResult.BlackWin -> current.blackUserId
             else -> null
@@ -264,26 +271,6 @@ class GameRepositoryImpl @Inject constructor(
         )
 
         try {
-            supabase.from("chess_moves").insert(
-                ChessMoveInsertDto(
-                    gameId = gid,
-                    moveNo = newMoveNo,
-                    side = sideText,
-                    fromRow = from.row,
-                    fromCol = from.col,
-                    toRow = to.row,
-                    toCol = to.col,
-                    fenBefore = fenBefore,
-                    fenAfter = fenAfter,
-                    spentMs = spentMs,
-                    createdAt = now,
-                    positionHash = annotation.positionHash,
-                    isCheck = annotation.isCheck,
-                    isChase = annotation.isChase,
-                    judgeTag = annotation.judgeTag,
-                ),
-            )
-
             val rpcResult = runCatching {
                 supabase.from("rpc/make_move_v2").select {
                     filter {
@@ -306,19 +293,61 @@ class GameRepositoryImpl @Inject constructor(
                 }.decodeSingle<MakeMoveV2ResponseDto>()
             }.getOrNull()
 
-            if (rpcResult == null || !rpcResult.ok) {
-                if (rpcResult?.error == "illegal_long_check") error("长将禁着，请变着")
-                if (rpcResult?.error == "illegal_long_chase") error("长捉禁着，请变着")
-                if (rpcResult?.error == "draw_by_repetition") error("三次重复，判和")
-                supabase.from("chess_games").update(updateDto) {
-                    filter {
-                        eq("id", gid)
-                        eq("move_no", current.moveNo)
-                        eq("turn_side", sideText)
+            when {
+                rpcResult?.ok == true -> {
+                    refreshGame()
+                    return@withContext
+                }
+                rpcResult != null && !rpcResult.ok -> {
+                    when (rpcResult.error) {
+                        "timeout_loss" -> {
+                            refreshGame()
+                            error("超时判负")
+                        }
+                        "illegal_long_check" -> error("长将禁着，请变着")
+                        "illegal_long_chase" -> error("长捉禁着，请变着")
+                        "draw_by_repetition" -> error("三次重复，判和")
+                        "move_no_conflict", "turn_conflict" -> {
+                            refreshGame()
+                            error("对局状态已更新，请重试")
+                        }
+                        else -> {
+                            refreshGame()
+                            error(rpcResult.error ?: "走子失败")
+                        }
                     }
                 }
+                else -> {
+                    // RPC 调用异常（如网络）：回退为客户端写库；正常路径下 chess_moves 仅由 make_move_v2 写入，避免 timeout 等失败产生孤立记录
+                    supabase.from("chess_moves").insert(
+                        ChessMoveInsertDto(
+                            gameId = gid,
+                            moveNo = newMoveNo,
+                            side = sideText,
+                            fromRow = from.row,
+                            fromCol = from.col,
+                            toRow = to.row,
+                            toCol = to.col,
+                            fenBefore = fenBefore,
+                            fenAfter = fenAfter,
+                            spentMs = spentMs,
+                            createdAt = now,
+                            positionHash = annotation.positionHash,
+                            isCheck = annotation.isCheck,
+                            isChase = annotation.isChase,
+                            judgeTag = annotation.judgeTag,
+                        ),
+                    )
+                    supabase.from("chess_games").update(updateDto) {
+                        filter {
+                            eq("id", gid)
+                            eq("move_no", current.moveNo)
+                            eq("turn_side", sideText)
+                        }
+                    }
+                    refreshGame()
+                }
             }
-            refreshGame()
         } catch (e: Throwable) {
             runCatching { refreshGame() }.onFailure { _gameState.value = baseline }
             throw e
@@ -488,9 +517,19 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun syncTimeoutIfDue(gid: String) {
+        runCatching {
+            supabase.postgrest.rpc(
+                "cnchess_sync_timeout_if_due",
+                buildJsonObject { put("p_game_id", gid) },
+            )
+        }
+    }
+
     private suspend fun refreshGame() = withContext(ioDispatcher) {
         val gid = gameId ?: return@withContext
         val uid = currentUserId() ?: return@withContext
+        syncTimeoutIfDue(gid)
         val game = supabase.from("chess_games").select {
             filter { eq("id", gid) }
         }.decodeSingle<GameDto>()
@@ -556,6 +595,7 @@ class GameRepositoryImpl @Inject constructor(
             status = toStatus(game.status),
             winnerUserId = game.winnerUserId,
             moveNo = game.moveNo,
+            createdAtMs = parseTimestampToMs(game.createdAt),
             lastMoveAtMs = parseTimestampToMs(game.lastMoveAt),
             drawReason = game.drawReason,
             drawOfferByUserId = game.drawOfferByUserId,

@@ -24,6 +24,8 @@ data class ChessGame(
     val status: ChessGameStatus,
     val winnerUserId: String? = null,
     val moveNo: Long = 0,
+    /** 对局创建时间；与 [lastMoveAtMs] 一起用于计算当前行棋方已用思考时间 */
+    val createdAtMs: Long? = null,
     val lastMoveAtMs: Long? = null,
     val drawReason: String? = null,
     val drawOfferByUserId: String? = null,
