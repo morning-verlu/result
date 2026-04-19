@@ -10,10 +10,13 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -49,6 +52,7 @@ class ContactsViewModel @Inject constructor(
 
     private val navigateToChatChannel = Channel<String>(Channel.BUFFERED)
     val navigateToChat = navigateToChatChannel.receiveAsFlow()
+    private var pendingObserveJob: Job? = null
 
     init {
         // Observe Room cache — instant display once DB 有数据
@@ -60,19 +64,38 @@ class ContactsViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
-        // 会话恢复后再订阅「待处理申请」并拉网，避免 userId 为空导致一直像空列表
+        // 随会话用户变化重绑 pending 订阅，避免冷启动瞬态导致订阅到空 userId。
         viewModelScope.launch {
-            supabase.auth.sessionStatus.first { it !is SessionStatus.Initializing }
-            val userId = supabase.auth.currentUserOrNull()?.id.orEmpty()
-            _state.update { it.copy(currentUserId = userId) }
+            supabase.auth.sessionStatus
+                .map { status ->
+                    if (status is SessionStatus.Initializing) null
+                    else supabase.auth.currentUserOrNull()?.id.orEmpty()
+                }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { userId ->
+                    pendingObserveJob?.cancel()
+                    if (userId.isBlank()) {
+                        _state.update {
+                            it.copy(
+                                currentUserId = "",
+                                pendingRequests = emptyList(),
+                                isInitialLoading = false,
+                            )
+                        }
+                        return@collect
+                    }
 
-            friendRepository.observePendingRequests(userId)
-                .onEach { list -> _state.update { it.copy(pendingRequests = list) } }
-                .launchIn(viewModelScope)
+                    _state.update { it.copy(currentUserId = userId) }
 
-            runCatching { friendRepository.refreshFriends() }
-                .onFailure { e -> _state.update { it.copy(error = e.message) } }
-            _state.update { it.copy(isInitialLoading = false) }
+                    pendingObserveJob = friendRepository.observePendingRequests(userId)
+                        .onEach { list -> _state.update { s -> s.copy(pendingRequests = list) } }
+                        .launchIn(viewModelScope)
+
+                    runCatching { friendRepository.refreshFriends() }
+                        .onFailure { e -> _state.update { it.copy(error = e.message) } }
+                    _state.update { it.copy(isInitialLoading = false) }
+                }
         }
 
         // Subscribe to realtime (writes to Room → Flow updates UI)
@@ -190,6 +213,7 @@ class ContactsViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        pendingObserveJob?.cancel()
         viewModelScope.launch {
             runCatching { friendRepository.unsubscribeFromFriendshipChanges() }
         }

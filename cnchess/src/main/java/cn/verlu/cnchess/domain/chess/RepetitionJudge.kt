@@ -14,10 +14,7 @@ object RepetitionJudge {
         annotation: MoveAnnotation,
     ): JudgeDecision {
         val hashCount = history.count { it.positionHash == annotation.positionHash } + 1
-        if (hashCount >= 3) {
-            return JudgeDecision(drawReason = "threefold_repetition")
-        }
-
+        val isRepeatedPosition = hashCount >= 3
         val sameSideHistory = history.filter { it.side == annotation.side }
         val recentThreeChecks = (sameSideHistory.takeLast(2).all { it.isCheck } && annotation.isCheck)
         if (recentThreeChecks) {
@@ -25,8 +22,13 @@ object RepetitionJudge {
         }
 
         val recentThreeChases = (sameSideHistory.takeLast(2).all { it.isChase } && annotation.isChase)
-        if (recentThreeChases) {
+        // 长捉需要建立在重复局面上，避免普通持续施压被误判为禁着。
+        if (recentThreeChases && isRepeatedPosition) {
             return JudgeDecision(illegalTag = "illegal_long_chase")
+        }
+
+        if (isRepeatedPosition) {
+            return JudgeDecision(drawReason = "threefold_repetition")
         }
 
         return JudgeDecision()

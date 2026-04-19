@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.cnchess"
         minSdk = 33
         targetSdk = 36
-        versionCode = 10
-        versionName = "2026.4.15"
+        versionCode = 11
+        versionName = "2026.4.151"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

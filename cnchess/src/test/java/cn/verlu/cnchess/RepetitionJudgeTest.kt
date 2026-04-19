@@ -51,6 +51,66 @@ class RepetitionJudgeTest {
     }
 
     @Test
+    fun longCheck_shouldTakePrecedenceOverThreefoldDraw() {
+        val history = listOf(
+            MoveRecord(1, Side.Red, 9, 4, 8, 4, positionHash = "h1", isCheck = true),
+            MoveRecord(2, Side.Black, 0, 4, 1, 4, positionHash = "h2"),
+            MoveRecord(3, Side.Red, 8, 4, 9, 4, positionHash = "h1", isCheck = true),
+            MoveRecord(4, Side.Black, 1, 4, 0, 4, positionHash = "h2"),
+        )
+        val annotation = MoveAnnotation(
+            side = Side.Red,
+            moveNo = 5,
+            positionHash = "h1",
+            isCheck = true,
+            isChase = false,
+        )
+        val decision = RepetitionJudge.decide(history, annotation)
+        assertEquals("illegal_long_check", decision.illegalTag)
+        assertNull(decision.drawReason)
+    }
+
+    @Test
+    fun longChase_shouldTakePrecedenceOverThreefoldDraw() {
+        val history = listOf(
+            MoveRecord(1, Side.Red, 9, 0, 8, 0, positionHash = "h1", isChase = true),
+            MoveRecord(2, Side.Black, 0, 0, 1, 0, positionHash = "h2"),
+            MoveRecord(3, Side.Red, 8, 0, 9, 0, positionHash = "h1", isChase = true),
+            MoveRecord(4, Side.Black, 1, 0, 0, 0, positionHash = "h2"),
+        )
+        val annotation = MoveAnnotation(
+            side = Side.Red,
+            moveNo = 5,
+            positionHash = "h1",
+            isCheck = false,
+            isChase = true,
+        )
+        val decision = RepetitionJudge.decide(history, annotation)
+        assertEquals("illegal_long_chase", decision.illegalTag)
+        assertNull(decision.drawReason)
+    }
+
+    @Test
+    fun continuousChase_withoutRepeatedPosition_shouldNotBeIllegalLongChase() {
+        val history = listOf(
+            MoveRecord(1, Side.Red, 9, 0, 8, 0, positionHash = "h1", isChase = true),
+            MoveRecord(2, Side.Black, 0, 0, 1, 0, positionHash = "h2"),
+            MoveRecord(3, Side.Red, 8, 0, 7, 0, positionHash = "h3", isChase = true),
+            MoveRecord(4, Side.Black, 1, 0, 2, 0, positionHash = "h4"),
+        )
+        val annotation = MoveAnnotation(
+            side = Side.Red,
+            moveNo = 5,
+            positionHash = "h5",
+            isCheck = false,
+            isChase = true,
+        )
+        val decision = RepetitionJudge.decide(history, annotation)
+        assertNull(decision.illegalTag)
+        assertNull(decision.drawReason)
+    }
+
+    @Test
     fun neutralMove_shouldPass() {
         val decision = RepetitionJudge.decide(
             history = emptyList(),

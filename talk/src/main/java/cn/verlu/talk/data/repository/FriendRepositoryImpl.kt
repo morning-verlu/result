@@ -17,21 +17,26 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import javax.inject.Inject
+import kotlin.math.min
 
 private const val TAG = "Talk/FriendRepo"
 
@@ -58,6 +63,9 @@ class FriendRepositoryImpl @Inject constructor(
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val friendChannelName = "friendship_changes"
+    private var activeChannel: RealtimeChannel? = null
+    private var realtimeRetryJob: Job? = null
+    private var keepRealtimeSubscription = false
 
     private fun currentUserId(): String? = supabase.auth.currentUserOrNull()?.id
 
@@ -146,43 +154,80 @@ class FriendRepositoryImpl @Inject constructor(
 
     // ─────────── Realtime ───────────
 
+    private suspend fun subscribeRealtimeOnce(): Boolean {
+        activeChannel?.let { old ->
+            runCatching { supabase.realtime.removeChannel(old) }
+                .onFailure { Log.w(TAG, "remove previous friendship channel failed", it) }
+        }
+
+        val channel = supabase.realtime.channel(friendChannelName)
+        activeChannel = channel
+
+        channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
+            table = "friendships"
+        }.onEach {
+            Log.d(TAG, "realtime: friendship INSERT, refreshing")
+            repoScope.launch { runCatching { refreshFriends() }
+                .onFailure { Log.e(TAG, "realtime friendship refresh failed", it) } }
+        }.launchIn(repoScope)
+
+        channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
+            table = "friendships"
+        }.onEach {
+            Log.d(TAG, "realtime: friendship UPDATE, refreshing")
+            repoScope.launch { runCatching { refreshFriends() }
+                .onFailure { Log.e(TAG, "realtime friendship refresh failed", it) } }
+        }.launchIn(repoScope)
+
+        channel.postgresChangeFlow<PostgresAction.Delete>(schema = "public") {
+            table = "friendships"
+        }.onEach {
+            Log.d(TAG, "realtime: friendship DELETE, refreshing")
+            repoScope.launch { runCatching { refreshFriends() }
+                .onFailure { Log.e(TAG, "realtime friendship DELETE refresh failed", it) } }
+        }.launchIn(repoScope)
+
+        return runCatching { channel.subscribe() }
+            .onFailure {
+                Log.e(TAG, "friendship realtime subscribe failed", it)
+                runCatching { supabase.realtime.removeChannel(channel) }
+                activeChannel = null
+            }
+            .isSuccess
+    }
+
+    private fun startRealtimeRetryLoop() {
+        realtimeRetryJob?.cancel()
+        realtimeRetryJob = repoScope.launch {
+            var attempt = 0
+            while (isActive && keepRealtimeSubscription) {
+                val ok = subscribeRealtimeOnce()
+                if (ok) {
+                    Log.d(TAG, "friendship realtime subscribed")
+                    return@launch
+                }
+                attempt += 1
+                val delayMs = 1_000L * (1 shl min(attempt, 5))
+                Log.w(TAG, "friendship realtime retry in ${delayMs}ms (attempt=$attempt)")
+                delay(delayMs)
+            }
+        }
+    }
+
     override suspend fun subscribeToFriendshipChanges() {
         Log.d(TAG, "subscribeToFriendshipChanges: channel=$friendChannelName")
-        runCatching {
-            val channel = supabase.realtime.channel(friendChannelName)
-
-            channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
-                table = "friendships"
-            }.onEach {
-                Log.d(TAG, "realtime: friendship INSERT, refreshing")
-                repoScope.launch { runCatching { refreshFriends() }
-                    .onFailure { Log.e(TAG, "realtime friendship refresh failed", it) } }
-            }.launchIn(repoScope)
-
-            channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
-                table = "friendships"
-            }.onEach {
-                Log.d(TAG, "realtime: friendship UPDATE, refreshing")
-                repoScope.launch { runCatching { refreshFriends() }
-                    .onFailure { Log.e(TAG, "realtime friendship refresh failed", it) } }
-            }.launchIn(repoScope)
-
-            channel.postgresChangeFlow<PostgresAction.Delete>(schema = "public") {
-                table = "friendships"
-            }.onEach {
-                Log.d(TAG, "realtime: friendship DELETE, refreshing")
-                repoScope.launch { runCatching { refreshFriends() }
-                    .onFailure { Log.e(TAG, "realtime friendship DELETE refresh failed", it) } }
-            }.launchIn(repoScope)
-
-            channel.subscribe()
-        }.onFailure { Log.e(TAG, "subscribeToFriendshipChanges failed", it) }
+        keepRealtimeSubscription = true
+        startRealtimeRetryLoop()
     }
 
     override suspend fun unsubscribeFromFriendshipChanges() {
+        keepRealtimeSubscription = false
+        realtimeRetryJob?.cancel()
+        realtimeRetryJob = null
         runCatching {
-            supabase.realtime.removeChannel(supabase.realtime.channel(friendChannelName))
+            activeChannel?.let { supabase.realtime.removeChannel(it) }
         }.onFailure { Log.w(TAG, "unsubscribeFromFriendshipChanges failed", it) }
+        activeChannel = null
     }
 
     // ─────────── Mutations ───────────
