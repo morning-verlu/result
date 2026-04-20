@@ -1,6 +1,6 @@
 package cn.verlu.talk.domain.model
 
-enum class MessageType { TEXT, IMAGE, LOCATION }
+enum class MessageType { TEXT, IMAGE, LOCATION, STICKER, VOICE }
 
 data class Message(
     val id: String,

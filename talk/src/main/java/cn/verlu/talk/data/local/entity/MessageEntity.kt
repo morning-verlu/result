@@ -31,6 +31,8 @@ fun MessageEntity.toDomain(): Message = Message(
     type = when (type) {
         "image" -> MessageType.IMAGE
         "location" -> MessageType.LOCATION
+        "sticker" -> MessageType.STICKER
+        "voice" -> MessageType.VOICE
         else -> MessageType.TEXT
     },
     createdAtMs = createdAtMs,

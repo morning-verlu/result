@@ -101,6 +101,8 @@ class MessageRepositoryImpl @Inject constructor(
         type = when (type) {
             "image" -> MessageType.IMAGE
             "location" -> MessageType.LOCATION
+            "sticker" -> MessageType.STICKER
+            "voice" -> MessageType.VOICE
             else -> MessageType.TEXT
         },
         createdAtMs = parseTimestampToMs(createdAt),
@@ -363,6 +365,35 @@ class MessageRepositoryImpl @Inject constructor(
                 sendMessage(roomId = roomId, content = signedUrl, type = "image")
             }.onFailure {
                 Log.e(TAG, "sendImageMessage: FAILED", it)
+                throw it
+            }
+        }
+    }
+
+    override suspend fun sendVoiceMessage(
+        roomId: String,
+        audioBytes: ByteArray,
+        durationMs: Long,
+        contentType: String,
+        extension: String,
+    ) {
+        withContext(ioDispatcher) {
+            require(audioBytes.isNotEmpty()) { "音频内容为空" }
+            require(audioBytes.size <= 5 * 1024 * 1024) { "音频不能超过 5MB" }
+            val userId = currentUserId()
+            val safeExt = extension.lowercase().trim('.').ifBlank { "m4a" }
+            val objectPath = "owners/$userId/talk-voices/$roomId/${System.currentTimeMillis()}-${UUID.randomUUID()}.$safeExt"
+            val bucket = supabase.storage.from(SupabaseConfig.STORAGE_BUCKET)
+            runCatching {
+                bucket.upload(objectPath, audioBytes) {
+                    this.contentType = ContentType.parse(contentType)
+                }
+                val signedUrl = bucket.createSignedUrl(objectPath, 365.days)
+                // 编码协议：`<durationMs>|<url>`，与所有合法 URL 不冲突
+                val content = "$durationMs|$signedUrl"
+                sendMessage(roomId = roomId, content = content, type = "voice")
+            }.onFailure {
+                Log.e(TAG, "sendVoiceMessage: FAILED", it)
                 throw it
             }
         }

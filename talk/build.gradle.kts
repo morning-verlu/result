@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.talk"
         minSdk = 29
         targetSdk = 36
-        versionCode = 12
-        versionName = "2026.4.143"
+        versionCode = 13
+        versionName = "2026.4.20"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.lottie.compose)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

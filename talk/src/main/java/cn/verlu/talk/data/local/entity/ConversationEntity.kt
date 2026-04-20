@@ -35,6 +35,8 @@ fun ConversationEntity.toDomain(): Conversation = Conversation(
         type = when (lastMessageType) {
             "image" -> MessageType.IMAGE
             "location" -> MessageType.LOCATION
+            "sticker" -> MessageType.STICKER
+            "voice" -> MessageType.VOICE
             else -> MessageType.TEXT
         },
         createdAtMs = lastMessageAtMs,

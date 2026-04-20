@@ -1,8 +1,11 @@
 package cn.verlu.talk.presentation.navigation
 
 import android.Manifest
+import android.content.Context
+import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -28,6 +31,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -91,6 +95,9 @@ import cn.verlu.talk.presentation.profile.ProfileScreen
 import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
 import cn.verlu.talk.presentation.update.AppUpdateGate
 import coil3.compose.AsyncImage
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -578,6 +585,7 @@ private fun HomeRouteWithShell(
                 .fillMaxSize()
                 .padding(innerPadding),
             selectedTab = homeTabIndex,
+            onSelectedTabChange = onHomeTabIndex,
             contactsViewModel = contactsViewModel,
             onNavigateToChat = onNavigateToChat,
             onNavigateToContacts = onNavigateToContactsTab,
@@ -652,6 +660,48 @@ private fun QrScanRouteWithShell(
     onBack: () -> Unit,
     qrScanViewModel: QrScanFriendViewModel,
 ) {
+    val context = LocalContext.current
+    val snackbar = LocalSnackbarHostState.current
+    val scope = rememberCoroutineScope()
+    val pickQrImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scanQrFromImageUri(
+            context = context,
+            uri = uri,
+            onRawScanned = { raw ->
+                when {
+                    raw.startsWith("verluTalk://user?uid=") -> {
+                        val uid = raw.removePrefix("verluTalk://user?uid=").trim()
+                        if (uid.isNotBlank()) {
+                            qrScanViewModel.onQrScanned(uid)
+                        } else {
+                            scope.launch { snackbar.showSnackbar("二维码内容无效") }
+                        }
+                    }
+                    raw.startsWith("verlusync://authorize_sso") -> {
+                        val sessionId = Uri.parse(raw).getQueryParameter("sessionId")
+                        if (!sessionId.isNullOrBlank()) {
+                            qrScanViewModel.onCloudLoginQrScanned(sessionId)
+                        } else {
+                            scope.launch { snackbar.showSnackbar("二维码内容无效") }
+                        }
+                    }
+                    else -> {
+                        scope.launch { snackbar.showSnackbar("未识别到支持的二维码类型") }
+                    }
+                }
+            },
+            onNoQrFound = {
+                scope.launch { snackbar.showSnackbar("未识别到二维码，请换一张清晰图片") }
+            },
+            onFailure = {
+                scope.launch { snackbar.showSnackbar("图片识别失败，请重试") }
+            },
+        )
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
@@ -667,6 +717,20 @@ private fun QrScanRouteWithShell(
                         )
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            pickQrImageLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.PhotoLibrary,
+                            contentDescription = "从相册选择图片扫码",
+                        )
+                    }
+                },
             )
         },
     ) { innerPadding ->
@@ -678,6 +742,28 @@ private fun QrScanRouteWithShell(
             viewModel = qrScanViewModel,
         )
     }
+}
+
+private fun scanQrFromImageUri(
+    context: Context,
+    uri: Uri,
+    onRawScanned: (String) -> Unit,
+    onNoQrFound: () -> Unit,
+    onFailure: (Throwable) -> Unit,
+) {
+    val input = runCatching { InputImage.fromFilePath(context, uri) }
+        .getOrElse {
+            onFailure(it)
+            return
+        }
+    val scanner = BarcodeScanning.getClient()
+    scanner.process(input)
+        .addOnSuccessListener { barcodes ->
+            val raw = barcodes.firstOrNull { it.format == Barcode.FORMAT_QR_CODE }?.rawValue
+            if (raw.isNullOrBlank()) onNoQrFound() else onRawScanned(raw)
+        }
+        .addOnFailureListener { onFailure(it) }
+        .addOnCompleteListener { scanner.close() }
 }
 
 sealed interface AppRoute : NavKey {

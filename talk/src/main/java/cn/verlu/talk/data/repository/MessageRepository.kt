@@ -39,6 +39,13 @@ interface MessageRepository {
         contentType: String,
         extension: String = "jpg",
     )
+    suspend fun sendVoiceMessage(
+        roomId: String,
+        audioBytes: ByteArray,
+        durationMs: Long,
+        contentType: String = "audio/m4a",
+        extension: String = "m4a",
+    )
     suspend fun softDeleteMessage(messageId: String)
     suspend fun markAllRead(roomId: String)
 }

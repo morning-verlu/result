@@ -1,0 +1,19 @@
+{
+  "packs": [
+    {
+      "id": "tigers",
+      "name": "虎虎表情包",
+      "cover": "asset:///stickers/lottie/tiger_laugh.json",
+      "stickers": [
+        {"id": "kiss",   "name": "亲亲虎", "url": "asset:///stickers/lottie/tiger_kiss.json"},
+        {"id": "love",   "name": "喜欢虎", "url": "asset:///stickers/lottie/tiger_love.json"},
+        {"id": "laugh",  "name": "大笑虎", "url": "asset:///stickers/lottie/tiger_laugh.json"},
+        {"id": "cool",   "name": "酷盖虎", "url": "asset:///stickers/lottie/tiger_cool.json"},
+        {"id": "sleep",  "name": "睡觉虎", "url": "asset:///stickers/lottie/tiger_sleep.json"},
+        {"id": "dizzy",  "name": "晕圈虎", "url": "asset:///stickers/lottie/tiger_dizzy.json"},
+        {"id": "sad",    "name": "委屈虎", "url": "asset:///stickers/lottie/tiger_sad.json"},
+        {"id": "angry",  "name": "发怒虎", "url": "asset:///stickers/lottie/tiger_angry.json"}
+      ]
+    }
+  ]
+}

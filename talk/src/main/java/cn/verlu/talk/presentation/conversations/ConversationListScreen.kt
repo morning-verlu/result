@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -52,6 +53,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.talk.domain.model.Conversation
 import cn.verlu.talk.domain.model.MessageType
+import cn.verlu.talk.presentation.chat.stickers.StickerRegistry
+import cn.verlu.talk.presentation.chat.stickers.StickerPackManifest
+import cn.verlu.talk.presentation.chat.stickers.rememberStickerManifest
+import cn.verlu.talk.presentation.chat.voice.parseVoiceContent
 import cn.verlu.talk.util.formatConversationTime
 import cn.verlu.talk.presentation.ui.TalkLoadingIndicator
 import cn.verlu.talk.presentation.ui.TalkPullToRefreshIndicator
@@ -66,6 +71,7 @@ fun ConversationListScreen(
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val stickerManifest by rememberStickerManifest()
     val pullToRefreshState = rememberPullToRefreshState()
     val lifecycleOwner = LocalLifecycleOwner.current
     val shouldVisibleRefresh = rememberUpdatedState(state.conversations.isEmpty())
@@ -112,7 +118,17 @@ fun ConversationListScreen(
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
+                    trailingIcon = {
+                        if (state.searchQuery.isNotBlank()) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "清空",
+                                modifier = Modifier.clickable { viewModel.setSearchQuery("") },
+                            )
+                        }
+                    },
                     singleLine = true,
+                    maxLines = 1,
                     shape = MaterialTheme.shapes.large,
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
@@ -194,6 +210,7 @@ fun ConversationListScreen(
                             items(state.filtered, key = { it.roomId }) { conversation ->
                                 ConversationItem(
                                     conversation = conversation,
+                                    stickerManifest = stickerManifest,
                                     onClick = {
                                         onNavigateToChat(conversation.roomId)
                                     }
@@ -214,6 +231,7 @@ private val HORIZONTAL_PADDING = 16.dp
 @Composable
 private fun ConversationItem(
     conversation: Conversation,
+    stickerManifest: StickerPackManifest?,
     onClick: () -> Unit,
 ) {
     Row(
@@ -263,6 +281,18 @@ private fun ConversationItem(
                 conversation.lastMessage.isDeleted -> "[撤回了一条消息]"
                 conversation.lastMessage.type == MessageType.IMAGE -> "[图片]"
                 conversation.lastMessage.type == MessageType.LOCATION -> "[位置]"
+                conversation.lastMessage.type == MessageType.STICKER -> {
+                    val content = conversation.lastMessage.content
+                    resolveStickerPreviewName(stickerManifest, content)
+                }
+                conversation.lastMessage.type == MessageType.VOICE -> {
+                    val durationMs = parseVoiceContent(conversation.lastMessage.content)?.first
+                    if (durationMs != null) {
+                        "【语音 ${formatVoicePreviewDuration(durationMs)}】"
+                    } else {
+                        "[语音]"
+                    }
+                }
                 else -> conversation.lastMessage.content
             }
 
@@ -285,6 +315,28 @@ private fun ConversationItem(
                 maxLines = 1
             )
         }
+    }
+}
+
+private fun resolveStickerPreviewName(
+    stickerManifest: StickerPackManifest?,
+    content: String,
+): String {
+    if (stickerManifest == null) return "[表情]"
+    val item = StickerRegistry.resolve(stickerManifest, content)
+    if (!item?.name.isNullOrBlank()) return item!!.name!!
+    val parsed = StickerRegistry.parseStickerContent(content)
+    return parsed?.second ?: "[表情]"
+}
+
+private fun formatVoicePreviewDuration(durationMs: Long): String {
+    val totalSec = (durationMs / 1000).toInt().coerceAtLeast(1)
+    return if (totalSec < 60) {
+        "${totalSec}秒"
+    } else {
+        val mm = totalSec / 60
+        val ss = totalSec % 60
+        "%d:%02d".format(mm, ss)
     }
 }
 

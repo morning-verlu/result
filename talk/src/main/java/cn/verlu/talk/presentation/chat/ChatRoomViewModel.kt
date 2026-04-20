@@ -11,6 +11,7 @@ import cn.verlu.talk.di.IoDispatcher
 import cn.verlu.talk.domain.model.Message
 import cn.verlu.talk.domain.model.MessageType
 import cn.verlu.talk.domain.model.Profile
+import cn.verlu.talk.presentation.chat.stickers.StickerRegistry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -35,8 +36,35 @@ data class ChatRoomState(
     val currentUserId: String = "",
     val isLoading: Boolean = false,
     val isSendingImage: Boolean = false,
+    val isSendingVoice: Boolean = false,
     val error: String? = null,
+    /**
+     * 发送中/失败的语音消息（key = 乐观消息的 tempId，即 Message.id）。
+     * - status = "sending"：气泡显示 loading；发送成功后会被移除并由服务端消息替换
+     * - status = "failed"：气泡显示红色「点击重发」；点击后走 retryVoice()
+     */
+    val pendingVoices: Map<String, PendingVoice> = emptyMap(),
 )
+
+/** 本地待发/重发语音的元数据。bytes 常驻直到发送成功。 */
+data class PendingVoice(
+    val bytes: ByteArray,
+    val durationMs: Long,
+    val status: Status = Status.Sending,
+) {
+    enum class Status { Sending, Failed }
+}
+
+/** 乐观语音消息的本地内容协议：`<durationMs>|pending:<tempId>`。 */
+internal fun encodePendingVoiceContent(durationMs: Long, tempId: String): String =
+    "$durationMs|pending:$tempId"
+
+fun parsePendingVoiceTempId(content: String): String? {
+    val idx = content.indexOf('|')
+    if (idx <= 0) return null
+    val tail = content.substring(idx + 1)
+    return if (tail.startsWith("pending:")) tail.removePrefix("pending:") else null
+}
 
 @HiltViewModel
 class ChatRoomViewModel @Inject constructor(
@@ -223,11 +251,135 @@ class ChatRoomViewModel @Inject constructor(
                     contentType = mimeType,
                     extension = extension,
                 )
+                // 兜底拉取：某些设备/网络上 realtime 可能晚到或偶发丢事件，
+                // 图片消息没有 optimistic 文本可先展示，因此这里主动 refresh 一次。
+                messageRepository.refreshMessages(currentRoomId)
             }.onFailure { e ->
                 Log.e(TAG, "sendImage failed", e)
                 _state.update { it.copy(error = "图片发送失败，请重试") }
             }
             _state.update { it.copy(isSendingImage = false) }
+        }
+    }
+
+    fun sendVoice(audioBytes: ByteArray, durationMs: Long) {
+        if (currentRoomId.isEmpty()) return
+        if (audioBytes.isEmpty()) {
+            _state.update { it.copy(error = "录音失败") }
+            return
+        }
+        if (audioBytes.size > 5 * 1024 * 1024) {
+            _state.update { it.copy(error = "语音不能超过 5MB") }
+            return
+        }
+
+        // 立刻在本地塞一条 optimistic 语音气泡，避免 realtime 晚到/断联时 UI 没反应
+        val tempId = "optimistic_voice_${System.currentTimeMillis()}"
+        val pending = PendingVoice(bytes = audioBytes, durationMs = durationMs, status = PendingVoice.Status.Sending)
+        val optimistic = Message(
+            id = tempId,
+            roomId = currentRoomId,
+            senderId = _state.value.currentUserId,
+            content = encodePendingVoiceContent(durationMs, tempId),
+            type = MessageType.VOICE,
+            createdAtMs = System.currentTimeMillis(),
+            isDeleted = false,
+            senderProfile = null,
+        )
+        _state.update {
+            it.copy(
+                messages = it.messages + optimistic,
+                pendingVoices = it.pendingVoices + (tempId to pending),
+            )
+        }
+
+        uploadAndSendVoice(tempId, audioBytes, durationMs)
+    }
+
+    /** 手动重发一条失败的 optimistic 语音。 */
+    fun retryVoice(tempId: String) {
+        if (currentRoomId.isEmpty()) return
+        val pending = _state.value.pendingVoices[tempId] ?: return
+        if (pending.status == PendingVoice.Status.Sending) return
+        _state.update { s ->
+            s.copy(
+                pendingVoices = s.pendingVoices + (tempId to pending.copy(status = PendingVoice.Status.Sending)),
+            )
+        }
+        uploadAndSendVoice(tempId, pending.bytes, pending.durationMs)
+    }
+
+    private fun uploadAndSendVoice(tempId: String, audioBytes: ByteArray, durationMs: Long) {
+        val roomId = currentRoomId
+        viewModelScope.launch {
+            _state.update { it.copy(isSendingVoice = true) }
+            runCatching {
+                messageRepository.sendVoiceMessage(
+                    roomId = roomId,
+                    audioBytes = audioBytes,
+                    durationMs = durationMs,
+                )
+                // 兜底拉取：realtime 断联/延迟时，确保真正的服务端消息落到本地缓存
+                runCatching { messageRepository.refreshMessages(roomId) }
+            }.onSuccess {
+                // 成功：移除本地 optimistic 气泡，由 refresh/realtime 带来的真实消息替代
+                _state.update { s ->
+                    s.copy(
+                        messages = s.messages.filter { it.id != tempId },
+                        pendingVoices = s.pendingVoices - tempId,
+                    )
+                }
+            }.onFailure { e ->
+                Log.e(TAG, "sendVoice failed (tempId=$tempId)", e)
+                _state.update { s ->
+                    val current = s.pendingVoices[tempId] ?: return@update s
+                    s.copy(
+                        pendingVoices = s.pendingVoices + (tempId to current.copy(status = PendingVoice.Status.Failed)),
+                        error = "语音发送失败，点击消息可重发",
+                    )
+                }
+            }
+            _state.update { it.copy(isSendingVoice = false) }
+        }
+    }
+
+    /** 放弃一条失败的 optimistic 语音（从本地气泡列表移除）。 */
+    fun discardPendingVoice(tempId: String) {
+        _state.update { s ->
+            s.copy(
+                messages = s.messages.filter { it.id != tempId },
+                pendingVoices = s.pendingVoices - tempId,
+            )
+        }
+    }
+
+    fun sendSticker(packId: String, stickerId: String) {
+        if (currentRoomId.isEmpty()) return
+        if (packId.isBlank() || stickerId.isBlank()) return
+        val content = StickerRegistry.encodeStickerContent(packId, stickerId)
+        val tempId = "optimistic_${System.currentTimeMillis()}"
+        val optimistic = Message(
+            id = tempId,
+            roomId = currentRoomId,
+            senderId = _state.value.currentUserId,
+            content = content,
+            type = MessageType.STICKER,
+            createdAtMs = System.currentTimeMillis(),
+            isDeleted = false,
+            senderProfile = null,
+        )
+        _state.update { it.copy(messages = it.messages + optimistic) }
+        viewModelScope.launch {
+            runCatching { messageRepository.sendMessage(currentRoomId, content, type = "sticker") }
+                .onFailure { e ->
+                    Log.e(TAG, "sendSticker failed", e)
+                    _state.update { s ->
+                        s.copy(
+                            messages = s.messages.filter { it.id != tempId },
+                            error = "表情发送失败，请重试",
+                        )
+                    }
+                }
         }
     }
 
