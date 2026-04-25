@@ -17,6 +17,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,13 +79,42 @@ class ChatRoomViewModel @Inject constructor(
 
     private var currentRoomId: String = ""
 
+    /** 切换房间时必须取消，否则会多个 observeMessages 同时往 [_state] 写，出现「串会话」 */
+    private var messagesObserveJob: Job? = null
+    private var refreshJob: Job? = null
+    private var peerProfileJob: Job? = null
+    private var realtimeSubscribeJob: Job? = null
+    private var markReadJob: Job? = null
+
     fun init(roomId: String) {
         if (currentRoomId == roomId) return
+        val previousRoomId = currentRoomId
         currentRoomId = roomId
-        _state.update { it.copy(currentUserId = supabase.auth.currentUserOrNull()?.id ?: "") }
 
-        // Observe Room cache (instant)
-        messageRepository.observeMessages(roomId)
+        messagesObserveJob?.cancel()
+        messagesObserveJob = null
+        refreshJob?.cancel()
+        refreshJob = null
+        peerProfileJob?.cancel()
+        peerProfileJob = null
+        realtimeSubscribeJob?.cancel()
+        realtimeSubscribeJob = null
+        markReadJob?.cancel()
+        markReadJob = null
+
+        if (previousRoomId.isNotEmpty()) {
+            viewModelScope.launch {
+                runCatching { messageRepository.unsubscribeFromRoom(previousRoomId) }
+            }
+        }
+
+        val uid = supabase.auth.currentUserOrNull()?.id ?: ""
+        _state.value = ChatRoomState(
+            currentUserId = uid,
+            isLoading = true,
+        )
+
+        messagesObserveJob = messageRepository.observeMessages(roomId)
             .onEach { msgs ->
                 _state.update { s ->
                     val currentUserId = s.currentUserId
@@ -120,23 +150,22 @@ class ChatRoomViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
-        // Show spinner only on first load (Room is empty for this room)
-        _state.update { it.copy(isLoading = true) }
-
-        // Background network refresh
-        viewModelScope.launch {
+        refreshJob = viewModelScope.launch {
             runCatching { messageRepository.refreshMessages(roomId) }
                 .onFailure { e ->
                     Log.e(TAG, "refreshMessages failed", e)
-                    _state.update { it.copy(error = e.message) }
+                    if (currentRoomId == roomId) {
+                        _state.update { it.copy(error = e.message) }
+                    }
                 }
-            _state.update { it.copy(isLoading = false) }
+            if (currentRoomId == roomId) {
+                _state.update { it.copy(isLoading = false) }
+            }
         }
 
         loadPeerProfile(roomId)
 
-        // Subscribe to realtime (writes to Room → Flow updates UI)
-        viewModelScope.launch {
+        realtimeSubscribeJob = viewModelScope.launch {
             runCatching {
                 messageRepository.subscribeToRoomMessages(roomId) { e ->
                     Log.e(TAG, "realtime error", e)
@@ -144,15 +173,15 @@ class ChatRoomViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        markReadJob = viewModelScope.launch {
             runCatching { messageRepository.markAllRead(roomId) }
         }
     }
 
     private fun loadPeerProfile(roomId: String) {
-        viewModelScope.launch {
+        peerProfileJob = viewModelScope.launch {
             val userId = supabase.auth.currentUserOrNull()?.id ?: return@launch
-            runCatching {
+            val peer = runCatching {
                 withContext(ioDispatcher) {
                     val friendship = supabase.postgrest["friendships"].select {
                         filter {
@@ -174,12 +203,13 @@ class ChatRoomViewModel @Inject constructor(
                         }.decodeList<ProfileDto>().firstOrNull()?.toDomain()
                     } else null
                 }
-            }.onSuccess { peer ->
-                Log.d(TAG, "loadPeerProfile success: ${peer?.displayName}")
-                _state.update { it.copy(peerProfile = peer) }
-            }.onFailure {
-                Log.e(TAG, "loadPeerProfile failed", it)
+            }.getOrElse { e ->
+                Log.e(TAG, "loadPeerProfile failed", e)
+                null
             }
+            if (currentRoomId != roomId) return@launch
+            Log.d(TAG, "loadPeerProfile success: ${peer?.displayName}")
+            _state.update { it.copy(peerProfile = peer) }
         }
     }
 

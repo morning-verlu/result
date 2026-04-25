@@ -7,6 +7,7 @@ import cn.verlu.talk.data.repository.ProfileRepository
 import cn.verlu.talk.domain.model.Profile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +50,11 @@ class QrScanFriendViewModel @Inject constructor(
 
     /** 扫到二维码后：查资料，暂停摄像头，展示底部确认卡片。 */
     fun onQrScanned(uid: String) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+        if (myId != null && uid == myId) {
+            _state.update { it.copy(isLookingUp = false, error = "不能添加自己为好友") }
+            return
+        }
         val s = _state.value
         if (s.isLookingUp || s.scannedProfile != null || s.success) return
         viewModelScope.launch {
@@ -68,6 +74,11 @@ class QrScanFriendViewModel @Inject constructor(
     /** 用户点击底部卡片的「发送好友申请」按钮。 */
     fun sendRequest() {
         val uid = _state.value.scannedProfile?.id ?: return
+        val myId = supabase.auth.currentUserOrNull()?.id
+        if (myId != null && uid == myId) {
+            _state.update { it.copy(error = "不能添加自己为好友", isSending = false) }
+            return
+        }
         viewModelScope.launch {
             _state.update { it.copy(isSending = true, error = null) }
             runCatching { friendRepository.sendFriendRequest(uid) }

@@ -129,7 +129,7 @@ fun ChatRoomScreen(
     roomId: String,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
-    viewModel: ChatRoomViewModel = hiltViewModel(),
+    viewModel: ChatRoomViewModel = hiltViewModel(key = roomId),
 ) {
     LaunchedEffect(roomId) { viewModel.init(roomId) }
 

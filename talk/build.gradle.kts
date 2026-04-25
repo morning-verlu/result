@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.talk"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "2026.4.20"
+        versionCode = 14
+        versionName = "2026.4.21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

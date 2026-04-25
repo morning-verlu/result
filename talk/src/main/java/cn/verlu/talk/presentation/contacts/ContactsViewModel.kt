@@ -177,6 +177,11 @@ class ContactsViewModel @Inject constructor(
     }
 
     fun sendFriendRequest(addresseeId: String) {
+        val myId = supabase.auth.currentUserOrNull()?.id
+        if (myId != null && addresseeId == myId) {
+            _state.update { it.copy(searchError = "不能添加自己为好友") }
+            return
+        }
         viewModelScope.launch {
             _state.update { it.copy(isSearching = true) }
             runCatching { friendRepository.sendFriendRequest(addresseeId) }
