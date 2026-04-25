@@ -7,6 +7,7 @@ This repository now includes a unified version check + release backend for:
 - `cn.verlu.music`
 - `cn.verlu.doctor`
 - `cn.verlu.cnchess`
+- `cn.verlu.memory`
 
 ## 1) Supabase migration
 

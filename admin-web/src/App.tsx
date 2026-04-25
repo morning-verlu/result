@@ -46,6 +46,7 @@ const COMMON_PACKAGE_NAMES = [
   'cn.verlu.music',
   'cn.verlu.doctor',
   'cn.verlu.cnchess',
+  'cn.verlu.memory',
   'cn.verlu.cloud',
   'cn.verlu.cloud.desktop',
 ] as const
