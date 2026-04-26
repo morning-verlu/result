@@ -1386,7 +1386,7 @@ private fun findCachedMediaUriIfExists(context: Context, uri: String, mimeType: 
     if (scheme != "http" && scheme != "https") return uri
     val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
     val target = File(cacheDir, buildCacheFileName(uri, mimeType))
-    return if (target.exists() && target.length() > 0L) target.toURI().toString() else null
+    return if (target.exists() && target.length() > 0L) Uri.fromFile(target).toString() else null
 }
 
 private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?): String {
@@ -1396,13 +1396,13 @@ private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?):
     val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
     val target = File(cacheDir, buildCacheFileName(uri, mimeType))
     if (target.exists() && target.length() > 0L) {
-        return target.toURI().toString()
+        return Uri.fromFile(target).toString()
     }
     return runCatching {
         URL(uri).openStream().use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         }
-        target.toURI().toString()
+        Uri.fromFile(target).toString()
     }.getOrElse { uri }
 }
 
