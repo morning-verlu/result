@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -35,13 +37,18 @@ import androidx.navigation3.ui.NavDisplay
 import cn.verlu.memory.presentation.auth.ui.AuthEmailRoute
 import cn.verlu.memory.presentation.auth.ui.AuthPasswordRoute
 import cn.verlu.memory.presentation.auth.ui.AuthRoute
-import cn.verlu.memory.presentation.auth.ui.AuthSessionLoadingOverlay
 import cn.verlu.memory.presentation.auth.ui.UpdatePasswordDialog
 import cn.verlu.memory.presentation.auth.vm.AuthEventManager
 import cn.verlu.memory.presentation.auth.vm.AuthSessionViewModel
+import cn.verlu.memory.presentation.lifestream.ui.LifeStreamRoute
 import cn.verlu.memory.presentation.lifestream.ui.LifeStreamScreen
 import cn.verlu.memory.presentation.update.AppUpdateGate
 import kotlinx.serialization.Serializable
+
+private fun isAuthSubFlow(route: NavKey?): Boolean {
+    val r = route as? MemoryRoute ?: return false
+    return r == MemoryRoute.Auth || r == MemoryRoute.AuthEmail || r == MemoryRoute.AuthPassword
+}
 
 @Serializable
 private sealed interface MemoryRoute : NavKey {
@@ -56,11 +63,21 @@ private sealed interface MemoryRoute : NavKey {
 
     @Serializable
     data object Home : MemoryRoute
-}
 
-private fun isAuthRoute(route: NavKey?): Boolean {
-    val r = route as? MemoryRoute ?: return false
-    return r == MemoryRoute.Auth || r == MemoryRoute.AuthEmail || r == MemoryRoute.AuthPassword
+    @Serializable
+    data object Search : MemoryRoute
+
+    @Serializable
+    data object Profile : MemoryRoute
+
+    @Serializable
+    data object Record : MemoryRoute
+
+    @Serializable
+    data class Detail(val entryId: String) : MemoryRoute
+
+    @Serializable
+    data object Settings : MemoryRoute
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +85,7 @@ private fun isAuthRoute(route: NavKey?): Boolean {
 fun MemoryNavApp(
     modifier: Modifier = Modifier,
 ) {
-    val backStack = rememberNavBackStack(MemoryRoute.Auth)
+    val backStack = rememberNavBackStack(MemoryRoute.Home)
     val pop: () -> Unit = { backStack.removeLastOrNull() }
     val authSessionVm: AuthSessionViewModel = hiltViewModel()
     val authState by authSessionVm.state.collectAsStateWithLifecycle()
@@ -78,23 +95,25 @@ fun MemoryNavApp(
 
     LaunchedEffect(authState.isInitializing, authState.isAuthenticated) {
         if (authState.isInitializing) return@LaunchedEffect
+
         val wasAuthenticated = prevAuthenticated
         prevAuthenticated = authState.isAuthenticated
+
         if (authState.isAuthenticated) {
             val justLoggedIn = wasAuthenticated == false
-            if (justLoggedIn && isAuthRoute(backStack.lastOrNull())) {
+            val current = backStack.lastOrNull()
+            if (justLoggedIn && isAuthSubFlow(current)) {
                 while (backStack.isNotEmpty()) backStack.removeLastOrNull()
                 backStack.add(MemoryRoute.Home)
-                snackbarHostState.showSnackbar("登录成功")
-            } else if (backStack.lastOrNull() == null) {
-                backStack.add(MemoryRoute.Home)
+                snackbarHostState.showSnackbar("授权登录成功 🎉")
             }
             return@LaunchedEffect
         }
-        if (!isAuthRoute(backStack.lastOrNull())) {
-            while (backStack.isNotEmpty()) backStack.removeLastOrNull()
-            backStack.add(MemoryRoute.Auth)
-        }
+
+        val current = backStack.lastOrNull() as? MemoryRoute
+        if (isAuthSubFlow(current)) return@LaunchedEffect
+        while (backStack.isNotEmpty()) backStack.removeLastOrNull()
+        backStack.add(MemoryRoute.Auth)
     }
 
     CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
@@ -112,7 +131,6 @@ fun MemoryNavApp(
             AppUpdateGate(
                 showMessage = { snackbarHostState.showSnackbar(it) },
             )
-            AuthSessionLoadingOverlay(modifier = Modifier.fillMaxSize())
             NavDisplay(
                 backStack = backStack,
                 onBack = pop,
@@ -133,7 +151,7 @@ fun MemoryNavApp(
                 },
                 entryProvider = entryProvider {
                     entry<MemoryRoute.Auth> {
-                        AuthRoute(
+                        AuthLandingWithShell(
                             modifier = Modifier.fillMaxSize(),
                             onOpenEmailLogin = { backStack.add(MemoryRoute.AuthEmail) },
                             onOpenEmailRegister = { backStack.add(MemoryRoute.AuthEmail) },
@@ -153,15 +171,134 @@ fun MemoryNavApp(
                         )
                     }
                     entry<MemoryRoute.Home> {
-                        LifeStreamScreen(
-                            onSignOut = { authSessionVm.signOut() },
-                            modifier = Modifier.fillMaxSize(),
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Home,
+                            onNavigate = { next ->
+                                when (next) {
+                                    LifeStreamRoute.Home -> Unit
+                                    LifeStreamRoute.Search -> backStack.add(MemoryRoute.Search)
+                                    LifeStreamRoute.Profile -> backStack.add(MemoryRoute.Profile)
+                                    LifeStreamRoute.Record -> backStack.add(MemoryRoute.Record)
+                                    is LifeStreamRoute.Detail -> backStack.add(MemoryRoute.Detail(next.entryId))
+                                    LifeStreamRoute.Settings -> backStack.add(MemoryRoute.Settings)
+                                }
+                            },
+                            onBack = pop,
+                        )
+                    }
+                    entry<MemoryRoute.Search> {
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Search,
+                            onNavigate = { next ->
+                                when (next) {
+                                    LifeStreamRoute.Home -> Unit
+                                    LifeStreamRoute.Search -> Unit
+                                    LifeStreamRoute.Profile -> backStack.add(MemoryRoute.Profile)
+                                    LifeStreamRoute.Record -> backStack.add(MemoryRoute.Record)
+                                    is LifeStreamRoute.Detail -> backStack.add(MemoryRoute.Detail(next.entryId))
+                                    LifeStreamRoute.Settings -> backStack.add(MemoryRoute.Settings)
+                                }
+                            },
+                            onBack = pop,
+                        )
+                    }
+                    entry<MemoryRoute.Profile> {
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Profile,
+                            onNavigate = { next ->
+                                when (next) {
+                                    LifeStreamRoute.Home -> Unit
+                                    LifeStreamRoute.Search -> backStack.add(MemoryRoute.Search)
+                                    LifeStreamRoute.Profile -> Unit
+                                    LifeStreamRoute.Record -> backStack.add(MemoryRoute.Record)
+                                    is LifeStreamRoute.Detail -> backStack.add(MemoryRoute.Detail(next.entryId))
+                                    LifeStreamRoute.Settings -> backStack.add(MemoryRoute.Settings)
+                                }
+                            },
+                            onBack = pop,
+                        )
+                    }
+                    entry<MemoryRoute.Record> {
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Record,
+                            onNavigate = { next ->
+                                if (next is LifeStreamRoute.Detail) {
+                                    backStack.add(MemoryRoute.Detail(next.entryId))
+                                }
+                            },
+                            onBack = pop,
+                        )
+                    }
+                    entry<MemoryRoute.Detail> { route ->
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Detail(route.entryId),
+                            onNavigate = { next ->
+                                when (next) {
+                                    LifeStreamRoute.Record -> backStack.add(MemoryRoute.Record)
+                                    is LifeStreamRoute.Detail -> backStack.add(MemoryRoute.Detail(next.entryId))
+                                    LifeStreamRoute.Search -> backStack.add(MemoryRoute.Search)
+                                    LifeStreamRoute.Profile -> backStack.add(MemoryRoute.Profile)
+                                    LifeStreamRoute.Settings -> backStack.add(MemoryRoute.Settings)
+                                    LifeStreamRoute.Home -> Unit
+                                }
+                            },
+                            onBack = pop,
+                        )
+                    }
+                    entry<MemoryRoute.Settings> {
+                        HomeRouteWithShell(
+                            route = LifeStreamRoute.Settings,
+                            onNavigate = {},
+                            onBack = pop,
                         )
                     }
                 },
             )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AuthLandingWithShell(
+    modifier: Modifier = Modifier,
+    onOpenEmailLogin: () -> Unit,
+    onOpenEmailRegister: () -> Unit,
+) {
+    val topAppBarState = androidx.compose.material3.rememberTopAppBarState()
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
+    Scaffold(
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0),
+        topBar = {
+            LargeTopAppBar(
+                title = { Text("登录") },
+                scrollBehavior = scrollBehavior,
+            )
+        },
+    ) { innerPadding ->
+        AuthRoute(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            onOpenEmailLogin = onOpenEmailLogin,
+            onOpenEmailRegister = onOpenEmailRegister,
+        )
+    }
+}
+
+@Composable
+private fun HomeRouteWithShell(
+    route: LifeStreamRoute,
+    onNavigate: (LifeStreamRoute) -> Unit,
+    onBack: () -> Unit,
+) {
+    LifeStreamScreen(
+        route = route,
+        onNavigate = onNavigate,
+        onBack = onBack,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

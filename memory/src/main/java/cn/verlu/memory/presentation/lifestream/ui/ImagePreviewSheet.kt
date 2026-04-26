@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import cn.verlu.memory.core.log.MemoryLog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -171,6 +172,7 @@ private fun ZoomableImagePage(
                         MemoryLoadingIndicator(
                             modifier = Modifier.size(28.dp),
                             color = Color.White,
+                            reason = "image_preview_network_loading",
                         )
                     }
                 }
@@ -413,7 +415,7 @@ private suspend fun saveImageToGallery(context: Context, url: String): Boolean =
         resolver.update(uri, values, null, null)
         true
     }.getOrElse {
-        android.util.Log.e("Memory/ImagePreview", "saveImageToGallery failed", it)
+        MemoryLog.e("Memory/ImagePreview", "saveImageToGallery failed", it)
         false
     }
 }
@@ -434,7 +436,7 @@ private fun downloadBytes(url: String): ByteArray? {
             conn.disconnect()
         }
     }.getOrElse {
-        android.util.Log.e("Memory/ImagePreview", "downloadBytes failed", it)
+        MemoryLog.e("Memory/ImagePreview", "downloadBytes failed", it)
         null
     }
 }

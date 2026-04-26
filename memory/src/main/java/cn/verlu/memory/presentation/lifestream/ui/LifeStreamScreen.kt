@@ -1,22 +1,27 @@
 package cn.verlu.memory.presentation.lifestream.ui
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -28,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -64,6 +70,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -77,9 +84,12 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -90,18 +100,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import cn.verlu.memory.domain.model.LifeEntry
+import cn.verlu.memory.domain.model.LifeEntryType
 import cn.verlu.memory.domain.model.LifeMedia
+import cn.verlu.memory.domain.model.SyncState
 import cn.verlu.memory.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.memory.presentation.lifestream.vm.LifeStreamUiState
 import cn.verlu.memory.presentation.lifestream.vm.LifeStreamViewModel
@@ -110,43 +128,40 @@ import cn.verlu.memory.presentation.lifestream.vm.formatDisplayTime
 import cn.verlu.memory.presentation.navigation.LocalSnackbarHostState
 import cn.verlu.memory.presentation.profile.ProfileScreen
 import cn.verlu.memory.presentation.ui.MemoryLoadingIndicator
+import cn.verlu.memory.presentation.ui.MemoryPullToRefreshIndicator
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.URL
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@Serializable
-private sealed interface MemoryRoute : NavKey {
-    @Serializable
-    data object Home : MemoryRoute
-
-    @Serializable
-    data object Search : MemoryRoute
-
-    @Serializable
-    data object Profile : MemoryRoute
-
-    @Serializable
-    data object Record : MemoryRoute
-
-    @Serializable
-    data class Detail(val entryId: String) : MemoryRoute
-
-    @Serializable
-    data object Settings : MemoryRoute
+sealed interface LifeStreamRoute {
+    data object Home : LifeStreamRoute
+    data object Search : LifeStreamRoute
+    data object Profile : LifeStreamRoute
+    data object Record : LifeStreamRoute
+    data class Detail(val entryId: String) : LifeStreamRoute
+    data object Settings : LifeStreamRoute
 }
 
 private val RECORD_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val TIMELINE_DAY_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val TIMELINE_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private const val MAX_VIDEO_SIZE_BYTES = 50L * 1024L * 1024L
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LifeStreamScreen(
-    onSignOut: () -> Unit,
-    modifier: Modifier = Modifier,
+    route: LifeStreamRoute = LifeStreamRoute.Home,
+    onNavigate: (LifeStreamRoute) -> Unit = {},
+    onBack: () -> Unit = {},
     viewModel: LifeStreamViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -161,6 +176,9 @@ fun LifeStreamScreen(
     var exportPayload by remember { mutableStateOf<String?>(null) }
     var exportFileName by remember { mutableStateOf("memory-life-stream.json") }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    var showSyncDebugPanel by remember { mutableStateOf(false) }
+    var playingVideoUri by remember { mutableStateOf<String?>(null) }
+    var handledRecordCloseNonce by rememberSaveable { mutableIntStateOf(0) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -181,7 +199,14 @@ fun LifeStreamScreen(
         uris.forEach { viewModel.appendMedia(it.toString(), "image/*") }
     }
     val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.appendMedia(it.toString(), "video/*") }
+        uri?.let {
+            val bytes = queryUriSizeBytes(context, it)
+            if (bytes != null && bytes > MAX_VIDEO_SIZE_BYTES) {
+                scope.launch { snackbarHostState.showSnackbar("视频超过 50MB，无法上传") }
+            } else {
+                viewModel.appendMedia(it.toString(), "video/*")
+            }
+        }
     }
 
     LaunchedEffect(state.message) {
@@ -194,170 +219,141 @@ fun LifeStreamScreen(
         if (state.scrollToTopNonce > 0 && state.timelineEntries.isNotEmpty()) listState.animateScrollToItem(0)
     }
 
-    val backStack = rememberNavBackStack(MemoryRoute.Home)
-    val pop: () -> Unit = { backStack.removeLastOrNull() }
-
-    LaunchedEffect(state.isRecordPageOpen, backStack.lastOrNull()) {
-        if (!state.isRecordPageOpen && backStack.lastOrNull() == MemoryRoute.Record) {
-            pop()
+    if (route is LifeStreamRoute.Record) {
+        LaunchedEffect(state.recordCloseNonce) {
+            if (state.recordCloseNonce > handledRecordCloseNonce) {
+                handledRecordCloseNonce = state.recordCloseNonce
+                onBack()
+            }
         }
     }
 
-    NavDisplay(
-        backStack = backStack,
-        onBack = pop,
-        modifier = modifier.fillMaxSize(),
-        transitionSpec = {
-            slideInHorizontally(initialOffsetX = { it }) togetherWith
-                slideOutHorizontally(targetOffsetX = { -it })
-        },
-        popTransitionSpec = {
-            slideInHorizontally(initialOffsetX = { -it }) togetherWith
-                slideOutHorizontally(targetOffsetX = { it })
-        },
-        predictivePopTransitionSpec = {
-            slideInHorizontally(initialOffsetX = { -it }) togetherWith
-                slideOutHorizontally(targetOffsetX = { it })
-        },
-        entryProvider = entryProvider {
-            entry<MemoryRoute.Home> {
-                HomePage(
-                    state = state,
-                    avatarUrl = avatarUrl,
-                    drawerState = drawerState,
-                    listState = listState,
-                    onOpenSearch = {
-                        viewModel.openSearchPage()
-                        backStack.add(MemoryRoute.Search)
-                    },
-                    onOpenProfile = {
-                        viewModel.openProfilePage()
-                        backStack.add(MemoryRoute.Profile)
-                    },
-                    onOpenSettings = {
-                        backStack.add(MemoryRoute.Settings)
-                    },
-                    onOpenCreateRecord = {
-                        viewModel.openCreateRecordPage()
-                        backStack.add(MemoryRoute.Record)
-                    },
-                    onOpenDetail = { entry ->
-                        viewModel.openDetailPage(entry)
-                        backStack.add(MemoryRoute.Detail(entry.id))
-                    },
-                    onEdit = { entry ->
-                        viewModel.openEditRecordPage(entry)
-                        backStack.add(MemoryRoute.Record)
-                    },
-                    onDelete = { viewModel.deleteEntry(it) },
-                    onExportSingle = { entry ->
-                        viewModel.exportSingleEntryAsJson(entry) { json ->
-                            exportPayload = json
-                            exportFileName = "memory-entry-${entry.id.take(8)}.json"
-                            exportLauncher.launch(exportFileName)
-                        }
-                    },
-                    onSyncNow = viewModel::syncNow,
-                    isRefreshing = state.isBusy,
-                    onRefresh = viewModel::refresh,
-                    onExportAll = {
-                        viewModel.exportAsJson { json ->
-                            exportPayload = json
-                            exportFileName = "memory-life-stream.json"
-                            exportLauncher.launch(exportFileName)
-                        }
-                    },
-                    onImport = { importLauncher.launch(arrayOf("application/json")) },
-                    showSnackbar = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
-                )
-            }
-
-            entry<MemoryRoute.Search> {
-                SearchScreen(
-                    state = state,
-                    onBack = {
-                        viewModel.closeSearchPage()
-                        pop()
-                    },
-                    onKeywordChange = viewModel::updateSearchKeyword,
-                    onClear = viewModel::clearSearchKeyword,
-                    onSelectFilter = viewModel::setSearchTimeFilter,
-                    onEdit = {
-                        viewModel.openEditRecordPage(it)
-                        backStack.add(MemoryRoute.Record)
-                    },
-                    onDelete = { viewModel.deleteEntry(it) },
-                    onOpenDetail = { entry ->
-                        viewModel.openDetailPage(entry)
-                        backStack.add(MemoryRoute.Detail(entry.id))
-                    },
-                    onExportSingle = { entry ->
-                        viewModel.exportSingleEntryAsJson(entry) { json ->
-                            exportPayload = json
-                            exportFileName = "memory-entry-${entry.id.take(8)}.json"
-                            exportLauncher.launch(exportFileName)
-                        }
-                    },
-                )
-            }
-
-            entry<MemoryRoute.Profile> {
-                ProfileScreen(
-                    onBack = {
-                        viewModel.closeProfilePage()
-                        pop()
-                    },
-                )
-            }
-
-            entry<MemoryRoute.Record> {
-                RecordScreen(
-                    state = state,
-                    onCancel = viewModel::requestCloseRecordPage,
-                    onSave = viewModel::saveRecord,
-                    onContentChanged = viewModel::updateDraftContent,
-                    onPickImage = { imageLauncher.launch("image/*") },
-                    onPickVideo = { videoLauncher.launch("video/*") },
-                    onOpenTimeDialog = viewModel::openTimeDialog,
-                    onRemoveMedia = viewModel::removeMediaAt,
-                )
-                BackHandler { viewModel.requestCloseRecordPage() }
-            }
-
-            entry<MemoryRoute.Detail> { route ->
-                val entry = state.allEntries.firstOrNull { it.id == route.entryId }
-                if (entry != null) {
-                    DetailScreen(
-                        entry = entry,
-                        onBack = {
-                            viewModel.closeDetailPage()
-                            pop()
-                        },
-                        onEdit = {
-                            viewModel.openEditRecordPage(entry)
-                            backStack.add(MemoryRoute.Record)
-                        },
-                        onDelete = {
-                            viewModel.deleteEntry(entry)
-                            viewModel.closeDetailPage()
-                            pop()
-                        },
-                    )
-                } else {
-                    LaunchedEffect(route.entryId) {
-                        viewModel.closeDetailPage()
-                        pop()
+    when (route) {
+        LifeStreamRoute.Home -> {
+            HomePage(
+                state = state,
+                avatarUrl = avatarUrl,
+                drawerState = drawerState,
+                listState = listState,
+                onOpenSearch = {
+                    onNavigate(LifeStreamRoute.Search)
+                },
+                onOpenProfile = {
+                    onNavigate(LifeStreamRoute.Profile)
+                },
+                onOpenSettings = { onNavigate(LifeStreamRoute.Settings) },
+                onOpenCreateRecord = {
+                    viewModel.openCreateRecordPage()
+                    onNavigate(LifeStreamRoute.Record)
+                },
+                onOpenDetail = { entry ->
+                    onNavigate(LifeStreamRoute.Detail(entry.id))
+                },
+                onPlayVideo = { uri -> playingVideoUri = uri },
+                onEdit = { entry ->
+                    viewModel.openEditRecordPage(entry)
+                    onNavigate(LifeStreamRoute.Record)
+                },
+                onDelete = { viewModel.deleteEntry(it) },
+                onExportSingle = { entry ->
+                    viewModel.exportSingleEntryAsJson(entry) { json ->
+                        exportPayload = json
+                        exportFileName = "memory-entry-${entry.id.take(8)}.json"
+                        exportLauncher.launch(exportFileName)
                     }
+                },
+                onSyncNow = viewModel::syncNow,
+                isRefreshing = state.isBusy,
+                onRefresh = viewModel::refresh,
+                onExportAll = {
+                    viewModel.exportAsJson { json ->
+                        exportPayload = json
+                        exportFileName = "memory-life-stream.json"
+                        exportLauncher.launch(exportFileName)
+                    }
+                },
+                onImport = { importLauncher.launch(arrayOf("application/json")) },
+                showSnackbar = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            )
+        }
+        LifeStreamRoute.Search -> {
+            SearchScreen(
+                state = state,
+                onBack = onBack,
+                onKeywordChange = viewModel::updateSearchKeyword,
+                onClear = viewModel::clearSearchKeyword,
+                onSelectFilter = viewModel::setSearchTimeFilter,
+                onEdit = {
+                    viewModel.openEditRecordPage(it)
+                    onNavigate(LifeStreamRoute.Record)
+                },
+                onDelete = { viewModel.deleteEntry(it) },
+                onOpenDetail = { entry ->
+                    onNavigate(LifeStreamRoute.Detail(entry.id))
+                },
+                onPlayVideo = { uri -> playingVideoUri = uri },
+                onExportSingle = { entry ->
+                    viewModel.exportSingleEntryAsJson(entry) { json ->
+                        exportPayload = json
+                        exportFileName = "memory-entry-${entry.id.take(8)}.json"
+                        exportLauncher.launch(exportFileName)
+                    }
+                },
+            )
+        }
+        LifeStreamRoute.Profile -> {
+            ProfileScreen(
+                onBack = onBack,
+            )
+        }
+        LifeStreamRoute.Record -> {
+            RecordScreen(
+                state = state,
+                onCancel = { viewModel.requestCloseRecordPage() },
+                onSave = viewModel::saveRecord,
+                onContentChanged = viewModel::updateDraftContent,
+                onPickImage = { imageLauncher.launch("image/*") },
+                onPickVideo = { videoLauncher.launch("video/*") },
+                onOpenTimeDialog = viewModel::openTimeDialog,
+                onRemoveMedia = viewModel::removeMediaAt,
+                isSaving = state.isSavingRecord,
+            )
+            BackHandler { viewModel.requestCloseRecordPage() }
+        }
+        is LifeStreamRoute.Detail -> {
+            val entry = state.allEntries.firstOrNull { it.id == route.entryId }
+            if (entry != null) {
+                DetailScreen(
+                    entry = entry,
+                    onBack = onBack,
+                    onSyncSingle = { viewModel.syncSingleEntry(entry.id) },
+                    onPlayVideo = { uri -> playingVideoUri = uri },
+                    onEdit = {
+                        viewModel.openEditRecordPage(entry)
+                        onNavigate(LifeStreamRoute.Record)
+                    },
+                    onDelete = {
+                        viewModel.deleteEntry(entry)
+                        onBack()
+                    },
+                )
+            } else {
+                LaunchedEffect(route.entryId) {
+                    onBack()
                 }
             }
-
-            entry<MemoryRoute.Settings> {
-                SettingsScreen(
-                    onBack = pop,
-                )
-            }
-        },
-    )
+        }
+        LifeStreamRoute.Settings -> {
+            SettingsScreen(
+                onBack = onBack,
+                showCloudBadge = state.showCloudBadge,
+                cloudSyncEnabled = state.cloudSyncEnabled,
+                onShowCloudBadgeChange = viewModel::setShowCloudBadge,
+                onCloudSyncEnabledChange = viewModel::setCloudSyncEnabled,
+                onOpenSyncDebugPanel = { showSyncDebugPanel = true },
+            )
+        }
+    }
 
     if (state.isDiscardDialogVisible) {
         AlertDialog(
@@ -451,6 +447,20 @@ fun LifeStreamScreen(
             )
         }
     }
+
+    if (showSyncDebugPanel) {
+        SyncStatusDebugDialog(
+            entries = state.timelineEntries,
+            onDismiss = { showSyncDebugPanel = false },
+            onRetry = { entryId -> viewModel.syncSingleEntry(entryId) },
+        )
+    }
+    playingVideoUri?.let { uri ->
+        VideoPlayerDialog(
+            videoUri = uri,
+            onDismiss = { playingVideoUri = null },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -465,6 +475,7 @@ private fun HomePage(
     onOpenSettings: () -> Unit,
     onOpenCreateRecord: () -> Unit,
     onOpenDetail: (LifeEntry) -> Unit,
+    onPlayVideo: (String) -> Unit,
     onEdit: (LifeEntry) -> Unit,
     onDelete: (LifeEntry) -> Unit,
     onExportSingle: (LifeEntry) -> Unit,
@@ -477,6 +488,10 @@ private fun HomePage(
 ) {
     val scope = rememberCoroutineScope()
     val pullToRefreshState = rememberPullToRefreshState()
+    val context = LocalContext.current
+    val emptyIllustrationResId = remember {
+        context.resources.getIdentifier("nulldata", "drawable", context.packageName)
+    }
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -487,7 +502,6 @@ private fun HomePage(
                 HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text("导出数据") },
-                    leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
                     onClick = {
                         scope.launch { drawerState.close() }
                         onExportAll()
@@ -495,7 +509,6 @@ private fun HomePage(
                 )
                 DropdownMenuItem(
                     text = { Text("导入数据") },
-                    leadingIcon = { Icon(Icons.Default.FileUpload, contentDescription = null) },
                     onClick = {
                         scope.launch { drawerState.close() }
                         onImport()
@@ -503,17 +516,9 @@ private fun HomePage(
                 )
                 DropdownMenuItem(
                     text = { Text("立即同步") },
-                    leadingIcon = { Icon(Icons.Default.FileUpload, contentDescription = null) },
                     onClick = {
                         scope.launch { drawerState.close() }
                         onSyncNow()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("设置") },
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onOpenSettings()
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -523,6 +528,13 @@ private fun HomePage(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+                DropdownMenuItem(
+                    text = { Text("设置") },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onOpenSettings()
+                    },
                 )
             }
         },
@@ -581,7 +593,7 @@ private fun HomePage(
             ) {
                 if (state.pendingSyncCount > 0) {
                     Text(
-                        text = "待同步媒体 ${state.pendingSyncCount} 项，网络恢复后自动同步",
+                        text = "待同步记录 ${state.pendingSyncCount} 条，网络恢复后自动同步",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = 6.dp),
@@ -593,24 +605,102 @@ private fun HomePage(
                     state = pullToRefreshState,
                     modifier = Modifier.fillMaxSize(),
                     indicator = {
-                        Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp)) {
-                            MemoryLoadingIndicator(modifier = Modifier.size(26.dp))
-                        }
+                        MemoryPullToRefreshIndicator(
+                            state = pullToRefreshState,
+                            isRefreshing = isRefreshing,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
                     },
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(state.timelineEntries, key = { it.id }) { entry ->
-                            EntryCard(
-                                entry = entry,
-                                onOpenDetail = { onOpenDetail(entry) },
-                                onEdit = { onEdit(entry) },
-                                onDelete = { onDelete(entry) },
-                                onExportSingle = { onExportSingle(entry) },
-                            )
+                    when {
+                        state.timelineEntries.isEmpty() && state.isInitialLoading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                MemoryLoadingIndicator(
+                                    modifier = Modifier.size(34.dp),
+                                    reason = "home_initial_loading_empty_local",
+                                )
+                            }
+                        }
+                        state.timelineEntries.isEmpty() -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                item(key = "empty-state") {
+                                    if (emptyIllustrationResId != 0) {
+                                        androidx.compose.foundation.Image(
+                                            painter = painterResource(id = emptyIllustrationResId),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(180.dp),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Image,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(96.dp),
+                                            tint = MaterialTheme.colorScheme.outlineVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            val groupedEntries = remember(state.timelineEntries) {
+                                state.timelineEntries.groupBy { entry ->
+                                    formatTimelineDay(entry.createdAtEpochMs)
+                                }
+                            }
+                            var collapsedDays by rememberSaveable { mutableStateOf(setOf<String>()) }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                state = listState,
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                groupedEntries.forEach { (day, entriesInDay) ->
+                                    item(key = "day-$day") {
+                                        DaySectionHeader(
+                                            day = day,
+                                            isCollapsed = collapsedDays.contains(day),
+                                            onToggle = {
+                                                collapsedDays = if (collapsedDays.contains(day)) {
+                                                    collapsedDays - day
+                                                } else {
+                                                    collapsedDays + day
+                                                }
+                                            },
+                                        )
+                                    }
+                                    item(key = "group-$day") {
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !collapsedDays.contains(day),
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically(),
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            ) {
+                                                entriesInDay.forEach { entry ->
+                                                    EntryCard(
+                                                        showCloudBadge = state.showCloudBadge,
+                                                        entry = entry,
+                                                        onOpenDetail = { onOpenDetail(entry) },
+                                                        onPlayVideo = onPlayVideo,
+                                                        onEdit = { onEdit(entry) },
+                                                        onDelete = { onDelete(entry) },
+                                                        onExportSingle = { onExportSingle(entry) },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -619,11 +709,46 @@ private fun HomePage(
     }
 }
 
+@Composable
+private fun DaySectionHeader(
+    day: String,
+    isCollapsed: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(top = 2.dp, bottom = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = day,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (isCollapsed) {
+                Text(
+                    text = "展开",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EntryCard(
+    showCloudBadge: Boolean,
     entry: LifeEntry,
     onOpenDetail: () -> Unit,
+    onPlayVideo: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onExportSingle: () -> Unit,
@@ -643,12 +768,11 @@ private fun EntryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = formatDisplayTime(entry.createdAtEpochMs),
+                    text = formatTimelineTime(entry.createdAtEpochMs),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val isCloudSynced = entry.mediaList.isNotEmpty() &&
-                    entry.mediaList.all { isCloudSyncedMediaUrl(it.uri) }
+                val isCloudSynced = showCloudBadge && entry.syncState == SyncState.SYNCED
                 if (isCloudSynced) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -677,14 +801,16 @@ private fun EntryCard(
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(entry.mediaList) { media ->
-                        MediaThumb(media = media)
+                        MediaThumb(
+                            media = media,
+                            onVideoClick = onPlayVideo,
+                        )
                     }
                 }
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(text = { Text("编辑") }, onClick = { menuExpanded = false; onEdit() })
                 DropdownMenuItem(text = { Text("删除") }, onClick = { menuExpanded = false; onDelete() })
-                DropdownMenuItem(text = { Text("导出这一条") }, onClick = { menuExpanded = false; onExportSingle() })
             }
         }
     }
@@ -699,20 +825,36 @@ private fun SearchScreen(
     onClear: () -> Unit,
     onSelectFilter: (SearchTimeFilter) -> Unit,
     onOpenDetail: (LifeEntry) -> Unit,
+    onPlayVideo: (String) -> Unit,
     onEdit: (LifeEntry) -> Unit,
     onDelete: (LifeEntry) -> Unit,
     onExportSingle: (LifeEntry) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    var inputValue by remember { mutableStateOf(TextFieldValue(state.searchKeyword)) }
+    LaunchedEffect(state.searchKeyword) {
+        if (state.searchKeyword != inputValue.text) {
+            inputValue = TextFieldValue(
+                text = state.searchKeyword,
+                selection = TextRange(state.searchKeyword.length),
+            )
+        }
+    }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        inputValue = inputValue.copy(selection = TextRange(inputValue.text.length))
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     TextField(
-                        value = state.searchKeyword,
-                        onValueChange = onKeywordChange,
+                        value = inputValue,
+                        onValueChange = { value ->
+                            inputValue = value
+                            onKeywordChange(value.text)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
@@ -726,8 +868,13 @@ private fun SearchScreen(
                         },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
-                            if (state.searchKeyword.isNotBlank()) {
-                                IconButton(onClick = onClear) {
+                            if (inputValue.text.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        inputValue = TextFieldValue("")
+                                        onClear()
+                                    },
+                                ) {
                                     Icon(Icons.Default.Close, contentDescription = "清空")
                                 }
                             }
@@ -787,8 +934,10 @@ private fun SearchScreen(
                 ) {
                     items(state.searchResults, key = { it.id }) { entry ->
                         EntryCard(
+                            showCloudBadge = state.showCloudBadge,
                             entry = entry,
                             onOpenDetail = { onOpenDetail(entry) },
+                            onPlayVideo = onPlayVideo,
                             onEdit = { onEdit(entry) },
                             onDelete = { onDelete(entry) },
                             onExportSingle = { onExportSingle(entry) },
@@ -805,6 +954,8 @@ private fun SearchScreen(
 private fun DetailScreen(
     entry: LifeEntry,
     onBack: () -> Unit,
+    onSyncSingle: () -> Unit,
+    onPlayVideo: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -825,6 +976,20 @@ private fun DetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = onSyncSingle,
+                        enabled = entry.syncState == SyncState.LOCAL_ONLY || entry.syncState == SyncState.ERROR,
+                    ) {
+                        Icon(
+                            imageVector = if (entry.syncState == SyncState.SYNCED) Icons.Default.CloudDone else Icons.Default.FileUpload,
+                            contentDescription = if (entry.syncState == SyncState.SYNCED) "已同步云端" else "同步到云端",
+                            tint = if (entry.syncState == SyncState.SYNCED) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Default.Edit, contentDescription = "编辑")
                     }
@@ -862,6 +1027,7 @@ private fun DetailScreen(
                                 val idx = imageUrls.indexOf(media.uri)
                                 if (idx >= 0) previewImageIndex = idx
                             },
+                            onVideoClick = onPlayVideo,
                         )
                     }
                 }
@@ -901,11 +1067,20 @@ private fun DetailScreen(
 private fun MediaThumb(
     media: LifeMedia,
     onImageClick: (() -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
 ) {
+    val cachedMediaUri by rememberCachedMediaUri(
+        uri = media.uri,
+        mimeType = media.mimeType,
+    )
+    val videoDurationText by rememberVideoDurationText(
+        uri = cachedMediaUri,
+        mimeType = media.mimeType,
+    )
     Box {
         if (media.mimeType?.startsWith("image/") == true) {
             AsyncImage(
-                model = media.uri,
+                model = cachedMediaUri,
                 contentDescription = null,
                 modifier = Modifier
                     .size(84.dp)
@@ -914,9 +1089,69 @@ private fun MediaThumb(
                     },
             )
         } else {
-            Card(modifier = Modifier.size(84.dp), colors = CardDefaults.cardColors()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.PlayCircleFilled, contentDescription = null)
+            Card(
+                modifier = Modifier
+                    .size(84.dp)
+                    .let { base ->
+                        if (onVideoClick != null) {
+                            base.clickable(onClick = { onVideoClick(cachedMediaUri) })
+                        } else {
+                            base
+                        }
+                    },
+                colors = CardDefaults.cardColors(),
+            ) {
+                VideoThumbContent(cachedMediaUri)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // 主流视频卡片表现：暗遮罩 + 中心播放按钮 + 左上角视频标签
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.26f)),
+                    )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.PlayCircleFilled,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(CircleShape)
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Videocam,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(10.dp),
+                        )
+                        Text(
+                            text = "视频",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    if (videoDurationText != null) {
+                        Text(
+                            text = videoDurationText.orEmpty(),
+                            color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
+                                .clip(CircleShape)
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
                 }
             }
         }
@@ -934,11 +1169,22 @@ private fun RecordScreen(
     onPickVideo: () -> Unit,
     onOpenTimeDialog: () -> Unit,
     onRemoveMedia: (Int) -> Unit,
+    isSaving: Boolean,
 ) {
     val focusRequester = remember { FocusRequester() }
+    var contentValue by remember { mutableStateOf(TextFieldValue(state.draftContent)) }
+    LaunchedEffect(state.draftContent) {
+        if (state.draftContent != contentValue.text) {
+            contentValue = TextFieldValue(
+                text = state.draftContent,
+                selection = TextRange(state.draftContent.length),
+            )
+        }
+    }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+        contentValue = contentValue.copy(selection = TextRange(contentValue.text.length))
     }
 
     Scaffold(
@@ -951,7 +1197,19 @@ private fun RecordScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onSave) { Text("保存") }
+                    TextButton(
+                        onClick = onSave,
+                        enabled = !isSaving,
+                    ) {
+                        if (isSaving) {
+                            MemoryLoadingIndicator(
+                                modifier = Modifier.size(18.dp),
+                                reason = "record_save",
+                            )
+                        } else {
+                            Text("保存")
+                        }
+                    }
                 },
             )
         },
@@ -977,8 +1235,11 @@ private fun RecordScreen(
                 .padding(horizontal = 12.dp),
         ) {
             TextField(
-                value = state.draftContent,
-                onValueChange = onContentChanged,
+                value = contentValue,
+                onValueChange = { value ->
+                    contentValue = value
+                    onContentChanged(value.text)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -1019,6 +1280,220 @@ private fun RecordScreen(
     }
 }
 
+@Composable
+private fun VideoThumbContent(uri: String) {
+    val context = LocalContext.current
+    val bitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, key1 = uri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    val parsed = Uri.parse(uri)
+                    if (parsed.scheme == "http" || parsed.scheme == "https") {
+                        retriever.setDataSource(uri, emptyMap())
+                    } else {
+                        retriever.setDataSource(context, parsed)
+                    }
+                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } finally {
+                    runCatching { retriever.release() }
+                }
+            }.getOrNull()
+        }
+    }
+    val bmp = bitmapState.value
+    if (bmp != null) {
+        androidx.compose.foundation.Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.Videocam, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun VideoPlayerDialog(
+    videoUri: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val player = remember(videoUri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(Uri.parse(videoUri)))
+            prepare()
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(player) {
+        onDispose {
+            runCatching {
+                player.stop()
+                player.release()
+            }
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.Black),
+        ) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    PlayerView(context).apply {
+                        useController = true
+                        controllerAutoShow = true
+                        this.player = player
+                    }
+                },
+                update = { view -> view.player = player },
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "关闭",
+                    tint = androidx.compose.ui.graphics.Color.White,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberCachedMediaUri(
+    uri: String,
+    mimeType: String?,
+): androidx.compose.runtime.State<String> {
+    val context = LocalContext.current
+    val existingLocal = remember(uri, mimeType) { findCachedMediaUriIfExists(context, uri, mimeType) }
+    return produceState(initialValue = existingLocal ?: uri, key1 = uri, key2 = mimeType) {
+        if (existingLocal != null) return@produceState
+        value = withContext(Dispatchers.IO) {
+            cacheMediaLocally(context, uri, mimeType)
+        }
+    }
+}
+
+private fun findCachedMediaUriIfExists(context: Context, uri: String, mimeType: String?): String? {
+    val parsed = Uri.parse(uri)
+    val scheme = parsed.scheme.orEmpty().lowercase()
+    if (scheme != "http" && scheme != "https") return uri
+    val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
+    val target = File(cacheDir, buildCacheFileName(uri, mimeType))
+    return if (target.exists() && target.length() > 0L) target.toURI().toString() else null
+}
+
+private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?): String {
+    val parsed = Uri.parse(uri)
+    val scheme = parsed.scheme.orEmpty().lowercase()
+    if (scheme != "http" && scheme != "https") return uri
+    val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
+    val target = File(cacheDir, buildCacheFileName(uri, mimeType))
+    if (target.exists() && target.length() > 0L) {
+        return target.toURI().toString()
+    }
+    return runCatching {
+        URL(uri).openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        target.toURI().toString()
+    }.getOrElse { uri }
+}
+
+private fun buildCacheFileName(uri: String, mimeType: String?): String {
+    val ext = when {
+        mimeType?.startsWith("image/") == true -> mimeType.substringAfter("image/", "img")
+        mimeType?.startsWith("video/") == true -> mimeType.substringAfter("video/", "mp4")
+        uri.contains(".") -> uri.substringAfterLast(".").substringBefore("?").takeIf { it.isNotBlank() } ?: "bin"
+        else -> "bin"
+    }
+    return "${sha256(uri)}.$ext"
+}
+
+@Composable
+private fun rememberVideoDurationText(
+    uri: String,
+    mimeType: String?,
+): androidx.compose.runtime.State<String?> {
+    val context = LocalContext.current
+    return produceState<String?>(initialValue = null, key1 = uri, key2 = mimeType) {
+        if (mimeType?.startsWith("video/") != true) {
+            value = null
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    val parsed = Uri.parse(uri)
+                    if (parsed.scheme == "http" || parsed.scheme == "https") {
+                        retriever.setDataSource(uri, emptyMap())
+                    } else {
+                        retriever.setDataSource(context, parsed)
+                    }
+                    val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()
+                        ?: return@runCatching null
+                    formatVideoDuration(durationMs)
+                } finally {
+                    runCatching { retriever.release() }
+                }
+            }.getOrNull()
+        }
+    }
+}
+
+private fun formatVideoDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+private fun sha256(value: String): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+}
+
+private fun queryUriSizeBytes(context: Context, uri: Uri): Long? {
+    val cursor = context.contentResolver.query(
+        uri,
+        arrayOf(android.provider.OpenableColumns.SIZE),
+        null,
+        null,
+        null,
+    )
+    cursor?.use {
+        val sizeColumn = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+        if (sizeColumn >= 0 && it.moveToFirst()) {
+            return it.getLong(sizeColumn).takeIf { size -> size > 0L }
+        }
+    }
+    return null
+}
+
 private fun readTextFromUri(context: Context, uri: Uri): String? =
     runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
 
@@ -1028,15 +1503,32 @@ private fun writeTextToUri(context: Context, uri: Uri, value: String): Boolean =
         true
     }.getOrDefault(false)
 
-private fun isCloudSyncedMediaUrl(uri: String): Boolean {
-    return uri.startsWith("http://") || uri.startsWith("https://")
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
     onBack: () -> Unit,
+    showCloudBadge: Boolean,
+    cloudSyncEnabled: Boolean,
+    onShowCloudBadgeChange: (Boolean) -> Unit,
+    onCloudSyncEnabledChange: (Boolean) -> Unit,
+    onOpenSyncDebugPanel: () -> Unit,
 ) {
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
+    var showCloudEnableConfirmDialog by remember { mutableStateOf(false) }
+    val unlockTapTarget = 7
+    val unlockWindowMs = 1_500L
+
+    fun handleVersionTap() {
+        val now = System.currentTimeMillis()
+        versionTapCount = if (now - lastVersionTapAt <= unlockWindowMs) versionTapCount + 1 else 1
+        lastVersionTapAt = now
+        if (versionTapCount >= unlockTapTarget) {
+            versionTapCount = 0
+            onOpenSyncDebugPanel()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -1055,19 +1547,128 @@ private fun SettingsScreen(
                 .padding(padding),
         ) {
             ListItem(
-                headlineContent = { Text("同步策略") },
-                supportingContent = { Text("当前：有网络自动同步，可在侧边栏手动立即同步") },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("数据导出/导入") },
-                supportingContent = { Text("可在侧边栏导出全部 JSON 或导入 JSON") },
+                headlineContent = { Text("云同步") },
+                supportingContent = { Text("控制是否开启云同步（默认关闭）") },
+                trailingContent = {
+                    Switch(
+                        checked = cloudSyncEnabled,
+                        onCheckedChange = { enabled ->
+                            when {
+                                enabled && !cloudSyncEnabled -> showCloudEnableConfirmDialog = true
+                                !enabled && cloudSyncEnabled -> onCloudSyncEnabledChange(false)
+                            }
+                        },
+                    )
+                },
             )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text("云端状态标识") },
-                supportingContent = { Text("右上角“云端”图标表示媒体地址已是远程链接") },
+                supportingContent = { Text("控制首页卡片右上角“云端”图标提醒（默认开启）") },
+                trailingContent = {
+                    Switch(
+                        checked = showCloudBadge,
+                        onCheckedChange = onShowCloudBadgeChange,
+                    )
+                },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("应用信息") },
+                supportingContent = {
+                    val context = LocalContext.current
+                    Text("版本 ${readAppVersionName(context)}")
+                },
+                modifier = Modifier.clickable(onClick = ::handleVersionTap),
             )
         }
     }
+    if (showCloudEnableConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showCloudEnableConfirmDialog = false },
+            title = { Text("开启云同步") },
+            text = { Text("如果未注册 cloud 项目账号，该功能可能无法正常使用。是否继续开启？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCloudEnableConfirmDialog = false
+                        onCloudSyncEnabledChange(true)
+                    },
+                ) { Text("继续开启") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloudEnableConfirmDialog = false }) { Text("取消") }
+            },
+        )
+    }
 }
+
+@Composable
+private fun SyncStatusDebugDialog(
+    entries: List<LifeEntry>,
+    onDismiss: () -> Unit,
+    onRetry: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("同步状态面板") },
+        text = {
+            if (entries.isEmpty()) {
+                Text("暂无记录")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(entries, key = { it.id }) { entry ->
+                        val uploaded = entry.mediaList.count { media ->
+                            media.uri.startsWith("http://") || media.uri.startsWith("https://")
+                        }
+                        val total = entry.mediaList.size
+                        val canRetry = entry.syncState == SyncState.LOCAL_ONLY || entry.syncState == SyncState.ERROR
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("Entry: ${entry.id.take(12)}")
+                                Text("状态: ${entry.syncState}")
+                                Text("重试: ${entry.retryCount}")
+                                Text("媒体: 已上传 $uploaded / $total")
+                                Text("云端: ${if (entry.syncState == SyncState.SYNCED) "已确认" else "未确认"}")
+                                if (canRetry) {
+                                    TextButton(onClick = { onRetry(entry.id) }) {
+                                        Text("手动重试")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+    )
+}
+
+private fun readAppVersionName(context: Context): String {
+    val packageName = context.packageName
+    return runCatching {
+        val packageInfo = context.packageManager.getPackageInfo(packageName, 0)
+        packageInfo.versionName ?: "unknown"
+    }.getOrDefault("unknown")
+}
+
+private fun formatTimelineDay(epochMs: Long): String =
+    TIMELINE_DAY_FORMATTER.format(
+        Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).toLocalDate(),
+    )
+
+private fun formatTimelineTime(epochMs: Long): String =
+    TIMELINE_TIME_FORMATTER.format(
+        Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).toLocalDateTime(),
+    )

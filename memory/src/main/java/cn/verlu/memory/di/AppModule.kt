@@ -1,6 +1,11 @@
 package cn.verlu.memory.di
 
 import android.content.Context
+import androidx.room.Room
+import cn.verlu.memory.data.local.MemoryDatabase
+import cn.verlu.memory.data.local.MemorySettingsStore
+import cn.verlu.memory.data.local.dao.MemoryEntryDao
+import cn.verlu.memory.data.local.dao.TombstoneDao
 import cn.verlu.memory.data.repository.FileLifeStreamRepository
 import cn.verlu.memory.data.remote.SupabaseConfig
 import cn.verlu.memory.data.repository.SupabaseAuthRepository
@@ -28,6 +33,24 @@ import kotlin.time.Duration.Companion.seconds
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    @Provides
+    @Singleton
+    fun provideMemoryDatabase(
+        @ApplicationContext context: Context,
+    ): MemoryDatabase = Room.databaseBuilder(
+        context,
+        MemoryDatabase::class.java,
+        "memory.db",
+    ).fallbackToDestructiveMigration(dropAllTables = true).build()
+
+    @Provides
+    @Singleton
+    fun provideMemoryEntryDao(db: MemoryDatabase): MemoryEntryDao = db.memoryEntryDao()
+
+    @Provides
+    @Singleton
+    fun provideTombstoneDao(db: MemoryDatabase): TombstoneDao = db.tombstoneDao()
+
     @OptIn(SupabaseInternal::class)
     @Provides
     @Singleton
@@ -64,5 +87,14 @@ object AppModule {
     fun provideLifeStreamRepository(
         @ApplicationContext context: Context,
         supabase: SupabaseClient,
-    ): LifeStreamRepository = FileLifeStreamRepository(context, supabase)
+        memoryEntryDao: MemoryEntryDao,
+        tombstoneDao: TombstoneDao,
+        settingsStore: MemorySettingsStore,
+    ): LifeStreamRepository = FileLifeStreamRepository(
+        context = context,
+        supabase = supabase,
+        memoryEntryDao = memoryEntryDao,
+        tombstoneDao = tombstoneDao,
+        settingsStore = settingsStore,
+    )
 }

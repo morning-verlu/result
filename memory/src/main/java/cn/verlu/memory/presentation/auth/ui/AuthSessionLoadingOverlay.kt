@@ -51,7 +51,10 @@ fun AuthSessionLoadingOverlay(
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                MemoryLoadingIndicator(modifier = Modifier.size(36.dp))
+                MemoryLoadingIndicator(
+                    modifier = Modifier.size(36.dp),
+                    reason = "auth_session_overlay",
+                )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "正在完成登录",

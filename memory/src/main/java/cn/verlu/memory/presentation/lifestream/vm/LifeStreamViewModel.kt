@@ -2,9 +2,12 @@ package cn.verlu.memory.presentation.lifestream.vm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cn.verlu.memory.core.log.MemoryLog
+import cn.verlu.memory.data.local.MemorySettingsStore
 import cn.verlu.memory.domain.model.LifeEntry
 import cn.verlu.memory.domain.model.LifeMedia
 import cn.verlu.memory.domain.model.LifeEntryType
+import cn.verlu.memory.domain.model.SyncState
 import cn.verlu.memory.domain.repository.LifeStreamRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
@@ -16,9 +19,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
@@ -27,12 +29,8 @@ private val SINGLE_ENTRY_EXPORT_JSON = Json { prettyPrint = true }
 
 data class LifeStreamUiState(
     val allEntries: List<LifeEntry> = emptyList(),
-    val isProfilePageOpen: Boolean = false,
-    val isSearchPageOpen: Boolean = false,
-    val detailEntryId: String? = null,
     val searchKeyword: String = "",
     val searchTimeFilter: SearchTimeFilter = SearchTimeFilter.ALL,
-    val isRecordPageOpen: Boolean = false,
     val editingEntryId: String? = null,
     val draftContent: String = "",
     val draftTimeText: String = nowInputTime(),
@@ -40,8 +38,13 @@ data class LifeStreamUiState(
     val isDiscardDialogVisible: Boolean = false,
     val isTimeDialogVisible: Boolean = false,
     val customTimeInput: String = nowInputTime(),
+    val recordCloseNonce: Int = 0,
     val scrollToTopNonce: Int = 0,
     val pendingSyncCount: Int = 0,
+    val showCloudBadge: Boolean = true,
+    val cloudSyncEnabled: Boolean = false,
+    val isInitialLoading: Boolean = false,
+    val isSavingRecord: Boolean = false,
     val isBusy: Boolean = false,
     val message: String? = null,
     val isError: Boolean = false,
@@ -71,8 +74,6 @@ data class LifeStreamUiState(
                 .toList()
         }
 
-    val detailEntry: LifeEntry?
-        get() = detailEntryId?.let { id -> allEntries.firstOrNull { it.id == id } }
 }
 
 enum class SearchTimeFilter {
@@ -84,55 +85,100 @@ enum class SearchTimeFilter {
 @HiltViewModel
 class LifeStreamViewModel @Inject constructor(
     private val repository: LifeStreamRepository,
+    private val settingsStore: MemorySettingsStore,
 ) : ViewModel() {
+    companion object {
+        private const val TAG = "MemoryLifeStreamVM"
+    }
     private val _uiState = MutableStateFlow(LifeStreamUiState())
     val uiState: StateFlow<LifeStreamUiState> = _uiState.asStateFlow()
+    private var hasBootstrappedFromLocal = false
 
     init {
-        refresh()
-        startAutoSyncLoop()
+        MemoryLog.d(TAG, "init")
+        observeSettings()
+        observeLocalEntries()
+    }
+
+    private fun observeSettings() {
+        viewModelScope.launch {
+            settingsStore.showCloudBadge.collectLatest { enabled ->
+                MemoryLog.d(TAG, "settings showCloudBadge=$enabled")
+                _uiState.update { it.copy(showCloudBadge = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsStore.cloudSyncEnabled.collectLatest { enabled ->
+                MemoryLog.d(TAG, "settings cloudSyncEnabled=$enabled")
+                _uiState.update { it.copy(cloudSyncEnabled = enabled) }
+            }
+        }
+    }
+
+    private fun observeLocalEntries() {
+        viewModelScope.launch {
+            repository.observeEntries().collectLatest { entries ->
+                MemoryLog.d(TAG, "observeEntries count=${entries.size}")
+                _uiState.update {
+                    it.copy(
+                        allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
+                        pendingSyncCount = countPendingMedia(entries),
+                    )
+                }
+                if (!hasBootstrappedFromLocal) {
+                    hasBootstrappedFromLocal = true
+                    MemoryLog.d(TAG, "bootstrap trigger hasLocal=${entries.isNotEmpty()}")
+                    bootstrap(hasLocal = entries.isNotEmpty())
+                }
+            }
+        }
+    }
+
+    private fun bootstrap(hasLocal: Boolean) {
+        viewModelScope.launch {
+            MemoryLog.d(TAG, "bootstrap start hasLocal=$hasLocal")
+            _uiState.update { it.copy(isInitialLoading = !hasLocal) }
+            runCatching { repository.getAll() }
+                .onSuccess { MemoryLog.d(TAG, "bootstrap remote refresh success") }
+                .onFailure {
+                    MemoryLog.w(TAG, "bootstrap remote refresh failed", it)
+                    _uiState.update {
+                        it.copy(
+                            message = "加载失败，请下拉重试",
+                            isError = true,
+                        )
+                    }
+                }
+            _uiState.update { it.copy(isInitialLoading = false) }
+            MemoryLog.d(TAG, "bootstrap done")
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
+            MemoryLog.d(TAG, "refresh start")
             _uiState.update { it.copy(isBusy = true) }
-            val entries = repository.getAll()
-            _uiState.update {
-                it.copy(
-                    isBusy = false,
-                    allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
-                    pendingSyncCount = countPendingMedia(entries),
-                )
-            }
+            runCatching { repository.getAll() }
+                .onSuccess { _ ->
+                    MemoryLog.d(TAG, "refresh success")
+                    _uiState.update { it.copy(isBusy = false, isInitialLoading = false) }
+                }
+                .onFailure {
+                    MemoryLog.w(TAG, "refresh failed", it)
+                    _uiState.update {
+                        it.copy(
+                            isBusy = false,
+                            isInitialLoading = false,
+                            message = "加载失败，请下拉重试",
+                            isError = true,
+                        )
+                    }
+                }
         }
     }
 
     fun updateSearchKeyword(value: String) {
         _uiState.update { it.copy(searchKeyword = value) }
-    }
-
-    fun openSearchPage() {
-        _uiState.update { it.copy(isSearchPageOpen = true) }
-    }
-
-    fun closeSearchPage() {
-        _uiState.update { it.copy(isSearchPageOpen = false) }
-    }
-
-    fun openProfilePage() {
-        _uiState.update { it.copy(isProfilePageOpen = true) }
-    }
-
-    fun closeProfilePage() {
-        _uiState.update { it.copy(isProfilePageOpen = false) }
-    }
-
-    fun openDetailPage(entry: LifeEntry) {
-        _uiState.update { it.copy(detailEntryId = entry.id) }
-    }
-
-    fun closeDetailPage() {
-        _uiState.update { it.copy(detailEntryId = null) }
     }
 
     fun clearSearchKeyword() {
@@ -146,8 +192,6 @@ class LifeStreamViewModel @Inject constructor(
     fun openCreateRecordPage() {
         _uiState.update {
             it.copy(
-                isRecordPageOpen = true,
-                detailEntryId = null,
                 editingEntryId = null,
                 draftContent = "",
                 draftTimeText = nowInputTime(),
@@ -160,8 +204,6 @@ class LifeStreamViewModel @Inject constructor(
     fun openEditRecordPage(entry: LifeEntry) {
         _uiState.update {
             it.copy(
-                isRecordPageOpen = true,
-                detailEntryId = null,
                 editingEntryId = entry.id,
                 draftContent = entry.content,
                 draftTimeText = formatDisplayTime(entry.createdAtEpochMs),
@@ -171,13 +213,21 @@ class LifeStreamViewModel @Inject constructor(
         }
     }
 
-    fun requestCloseRecordPage() {
+    fun requestCloseRecordPage(): Boolean {
         val snapshot = uiState.value
         if (!hasDraftContent(snapshot)) {
-            _uiState.update { it.copy(isRecordPageOpen = false, editingEntryId = null) }
-            return
+            _uiState.update {
+                it.copy(
+                    editingEntryId = null,
+                    draftContent = "",
+                    draftMediaList = emptyList(),
+                    recordCloseNonce = it.recordCloseNonce + 1,
+                )
+            }
+            return true
         }
         _uiState.update { it.copy(isDiscardDialogVisible = true) }
+        return false
     }
 
     fun dismissDiscardDialog() {
@@ -188,10 +238,10 @@ class LifeStreamViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isDiscardDialogVisible = false,
-                isRecordPageOpen = false,
                 editingEntryId = null,
                 draftContent = "",
                 draftMediaList = emptyList(),
+                recordCloseNonce = it.recordCloseNonce + 1,
             )
         }
     }
@@ -245,7 +295,12 @@ class LifeStreamViewModel @Inject constructor(
         val snapshot = uiState.value
         val content = snapshot.draftContent.trim()
         if (content.isBlank() && snapshot.draftMediaList.isEmpty()) {
-            _uiState.update { it.copy(isRecordPageOpen = false, editingEntryId = null) }
+            _uiState.update {
+                it.copy(
+                    editingEntryId = null,
+                    recordCloseNonce = it.recordCloseNonce + 1,
+                )
+            }
             return
         }
         val epochMs = parseInputTime(snapshot.draftTimeText)
@@ -261,44 +316,49 @@ class LifeStreamViewModel @Inject constructor(
 
         viewModelScope.launch {
             val entryId = snapshot.editingEntryId ?: UUID.randomUUID().toString()
-            val entry = LifeEntry(
-                id = entryId,
-                content = content,
-                createdAtEpochMs = epochMs,
-                type = type,
-                mediaList = snapshot.draftMediaList,
-            )
-            repository.upsert(entry)
-            val entries = repository.getAll()
-            _uiState.update {
-                it.copy(
-                    allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
-                    isRecordPageOpen = false,
-                    editingEntryId = null,
-                    isDiscardDialogVisible = false,
-                    scrollToTopNonce = it.scrollToTopNonce + 1,
-                    message = if (countPendingMedia(entries) > 0) {
-                        "已本地保存，网络恢复后自动同步"
-                    } else {
-                        if (snapshot.editingEntryId == null) "已记录" else "已更新"
-                    },
-                    pendingSyncCount = countPendingMedia(entries),
-                    isError = false,
+            _uiState.update { it.copy(isSavingRecord = true) }
+            runCatching {
+                MemoryLog.d(TAG, "saveRecord id=${entryId.take(8)} edit=${snapshot.editingEntryId != null} media=${snapshot.draftMediaList.size}")
+                val entry = LifeEntry(
+                    id = entryId,
+                    content = content,
+                    createdAtEpochMs = epochMs,
+                    updatedAtEpochMs = System.currentTimeMillis(),
+                    syncState = SyncState.LOCAL_ONLY,
+                    type = type,
+                    mediaList = snapshot.draftMediaList,
                 )
+                repository.upsert(entry)
+                MemoryLog.d(TAG, "saveRecord done id=${entryId.take(8)}")
+                _uiState.update {
+                    it.copy(
+                        editingEntryId = null,
+                        isDiscardDialogVisible = false,
+                        recordCloseNonce = it.recordCloseNonce + 1,
+                        scrollToTopNonce = it.scrollToTopNonce + 1,
+                        message = if (it.pendingSyncCount > 0) {
+                            "已本地保存，网络恢复后自动同步"
+                        } else {
+                            if (snapshot.editingEntryId == null) "已记录" else "已更新"
+                        },
+                        isError = false,
+                    )
+                }
+            }.onFailure {
+                MemoryLog.w(TAG, "saveRecord failed id=${entryId.take(8)}", it)
+                emitError(it.message ?: "保存失败，请稍后重试")
             }
+            _uiState.update { it.copy(isSavingRecord = false) }
         }
     }
 
     fun deleteEntry(entry: LifeEntry) {
         viewModelScope.launch {
+            MemoryLog.d(TAG, "deleteEntry id=${entry.id.take(8)}")
             repository.delete(entry.id)
-            val entries = repository.getAll()
             _uiState.update {
                 it.copy(
-                    allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
-                    detailEntryId = if (it.detailEntryId == entry.id) null else it.detailEntryId,
                     message = "已删除",
-                    pendingSyncCount = countPendingMedia(entries),
                     isError = false,
                 )
             }
@@ -328,12 +388,9 @@ class LifeStreamViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.importFromJson(json) }
                 .onSuccess { count ->
-                    val entries = repository.getAll()
                     _uiState.update {
                         it.copy(
-                            allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
                             message = "导入成功，共 $count 条",
-                            pendingSyncCount = countPendingMedia(entries),
                             isError = false,
                         )
                     }
@@ -344,25 +401,66 @@ class LifeStreamViewModel @Inject constructor(
 
     fun syncNow() {
         viewModelScope.launch {
+            MemoryLog.d(TAG, "syncNow click")
+            if (!uiState.value.cloudSyncEnabled) {
+                _uiState.update {
+                    it.copy(
+                        message = "云同步未开启，可在设置中打开",
+                        isError = true,
+                    )
+                }
+                return@launch
+            }
             val pendingBefore = uiState.value.pendingSyncCount
             runCatching { repository.syncPendingMedia() }
                 .onSuccess { changed ->
-                    val entries = repository.getAll()
-                    val pendingAfter = countPendingMedia(entries)
+                    val pendingAfter = uiState.value.pendingSyncCount
+                    MemoryLog.d(TAG, "syncNow done changed=$changed before=$pendingBefore after=$pendingAfter")
                     _uiState.update {
                         it.copy(
-                            allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
                             pendingSyncCount = pendingAfter,
                             message = when {
                                 pendingBefore <= 0 -> "没有需要同步的内容"
-                                changed > 0 || pendingAfter < pendingBefore -> "已同步 ${pendingBefore - pendingAfter} 条媒体"
-                                else -> "仍有 $pendingAfter 项待同步，请稍后重试"
+                                changed > 0 || pendingAfter < pendingBefore -> "已同步 ${pendingBefore - pendingAfter} 条记录"
+                                else -> "仍有 $pendingAfter 条待同步，请稍后重试"
                             },
                             isError = pendingBefore > 0 && changed <= 0 && pendingAfter >= pendingBefore,
                         )
                     }
                 }
-                .onFailure { emitError(it.message ?: "同步失败，请稍后重试") }
+                .onFailure {
+                    MemoryLog.w(TAG, "syncNow failed", it)
+                    emitError(it.message ?: "同步失败，请稍后重试")
+                }
+        }
+    }
+
+    fun syncSingleEntry(entryId: String) {
+        viewModelScope.launch {
+            MemoryLog.d(TAG, "syncSingleEntry id=${entryId.take(8)}")
+            if (!uiState.value.cloudSyncEnabled) {
+                _uiState.update {
+                    it.copy(
+                        message = "云同步未开启，可在设置中打开",
+                        isError = true,
+                    )
+                }
+                return@launch
+            }
+            runCatching { repository.syncEntry(entryId) }
+                .onSuccess { synced ->
+                    MemoryLog.d(TAG, "syncSingleEntry done id=${entryId.take(8)} synced=$synced")
+                    _uiState.update {
+                        it.copy(
+                            message = if (synced) "该条记录已同步到云端" else "该条记录同步失败，请稍后重试",
+                            isError = !synced,
+                        )
+                    }
+                }
+                .onFailure {
+                    MemoryLog.w(TAG, "syncSingleEntry failed id=${entryId.take(8)}", it)
+                    emitError(it.message ?: "同步失败，请稍后重试")
+                }
         }
     }
 
@@ -370,46 +468,35 @@ class LifeStreamViewModel @Inject constructor(
         _uiState.update { it.copy(message = null, isError = false) }
     }
 
+    fun setShowCloudBadge(enabled: Boolean) {
+        settingsStore.setShowCloudBadge(enabled)
+    }
+
+    fun setCloudSyncEnabled(enabled: Boolean) {
+        settingsStore.setCloudSyncEnabled(enabled)
+        if (enabled) {
+            _uiState.update {
+                it.copy(
+                    message = "已开启云同步。请先注册并登录 cloud 项目账号后使用",
+                    isError = false,
+                )
+            }
+        }
+    }
+
     private fun emitError(message: String) {
         _uiState.update { it.copy(message = message, isError = true) }
     }
 
-    private fun startAutoSyncLoop() {
-        viewModelScope.launch {
-            while (isActive) {
-                runCatching { repository.syncPendingMedia() }
-                    .onSuccess { changed ->
-                        if (changed > 0) {
-                            val entries = repository.getAll()
-                            _uiState.update {
-                                it.copy(
-                                    allEntries = entries.sortedByDescending { e -> e.createdAtEpochMs },
-                                    pendingSyncCount = countPendingMedia(entries),
-                                    message = "已自动同步 $changed 条待同步媒体",
-                                    isError = false,
-                                )
-                            }
-                        }
-                    }
-                delay(20_000)
-            }
-        }
-    }
 }
 
 private fun hasDraftContent(state: LifeStreamUiState): Boolean =
     state.draftContent.isNotBlank() || state.draftMediaList.isNotEmpty()
 
 private fun countPendingMedia(entries: List<LifeEntry>): Int =
-    entries.sumOf { entry ->
-        entry.mediaList.count { media ->
-            !isCloudSyncedMediaUrl(media.uri)
-        }
+    entries.count { entry ->
+        entry.syncState != SyncState.SYNCED
     }
-
-private fun isCloudSyncedMediaUrl(uri: String): Boolean {
-    return uri.startsWith("http://") || uri.startsWith("https://")
-}
 
 private fun parseInputTime(text: String): Long? =
     runCatching {

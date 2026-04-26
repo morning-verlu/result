@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -83,6 +82,18 @@ fun AuthRoute(
                 snackbar.showSnackbar("请先安装 Sync 应用")
             }
             viewModel.cancelSyncQrLogin()
+        }
+    }
+
+    LaunchedEffect(state.error, state.info) {
+        state.error?.let {
+            scope.launch { snackbar.showSnackbar(it) }
+            viewModel.clearMessage()
+            return@LaunchedEffect
+        }
+        state.info?.let {
+            scope.launch { snackbar.showSnackbar(it) }
+            viewModel.clearMessage()
         }
     }
 
@@ -245,14 +256,6 @@ fun AuthRoute(
                     }
                 }
 
-                state.error?.let {
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        it,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                    )
-                }
             }
         }
         AuthSessionLoadingOverlay(alsoWhen = state.isSubmitting)
