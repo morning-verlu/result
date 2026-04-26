@@ -9,8 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import cn.verlu.memory.presentation.auth.ui.MemoryAuthApp
 import cn.verlu.memory.presentation.auth.vm.AuthEventManager
+import cn.verlu.memory.presentation.navigation.MemoryNavApp
 import cn.verlu.memory.ui.theme.SyncTheme
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.jan.supabase.SupabaseClient
@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MemoryApp() = MemoryAuthApp()
+fun MemoryApp() = MemoryNavApp()
 
 @Preview(showBackground = true)
 @Composable

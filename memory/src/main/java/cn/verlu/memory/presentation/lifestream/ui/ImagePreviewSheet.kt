@@ -40,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -67,6 +66,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cn.verlu.memory.presentation.ui.MemoryLoadingIndicator
 import coil3.compose.SubcomposeAsyncImage
 import java.net.HttpURLConnection
 import java.net.URL
@@ -168,9 +168,8 @@ private fun ZoomableImagePage(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.32f)) {
                     Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
+                        MemoryLoadingIndicator(
                             modifier = Modifier.size(28.dp),
-                            strokeWidth = 2.5.dp,
                             color = Color.White,
                         )
                     }

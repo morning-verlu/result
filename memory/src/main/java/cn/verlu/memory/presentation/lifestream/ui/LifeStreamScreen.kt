@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -72,6 +74,8 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,6 +109,7 @@ import cn.verlu.memory.presentation.lifestream.vm.SearchTimeFilter
 import cn.verlu.memory.presentation.lifestream.vm.formatDisplayTime
 import cn.verlu.memory.presentation.navigation.LocalSnackbarHostState
 import cn.verlu.memory.presentation.profile.ProfileScreen
+import cn.verlu.memory.presentation.ui.MemoryLoadingIndicator
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import kotlinx.coroutines.launch
@@ -130,6 +135,9 @@ private sealed interface MemoryRoute : NavKey {
 
     @Serializable
     data class Detail(val entryId: String) : MemoryRoute
+
+    @Serializable
+    data object Settings : MemoryRoute
 }
 
 private val RECORD_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -226,6 +234,9 @@ fun LifeStreamScreen(
                         viewModel.openProfilePage()
                         backStack.add(MemoryRoute.Profile)
                     },
+                    onOpenSettings = {
+                        backStack.add(MemoryRoute.Settings)
+                    },
                     onOpenCreateRecord = {
                         viewModel.openCreateRecordPage()
                         backStack.add(MemoryRoute.Record)
@@ -247,6 +258,8 @@ fun LifeStreamScreen(
                         }
                     },
                     onSyncNow = viewModel::syncNow,
+                    isRefreshing = state.isBusy,
+                    onRefresh = viewModel::refresh,
                     onExportAll = {
                         viewModel.exportAsJson { json ->
                             exportPayload = json
@@ -336,6 +349,12 @@ fun LifeStreamScreen(
                         pop()
                     }
                 }
+            }
+
+            entry<MemoryRoute.Settings> {
+                SettingsScreen(
+                    onBack = pop,
+                )
             }
         },
     )
@@ -443,17 +462,21 @@ private fun HomePage(
     listState: androidx.compose.foundation.lazy.LazyListState,
     onOpenSearch: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenCreateRecord: () -> Unit,
     onOpenDetail: (LifeEntry) -> Unit,
     onEdit: (LifeEntry) -> Unit,
     onDelete: (LifeEntry) -> Unit,
     onExportSingle: (LifeEntry) -> Unit,
     onSyncNow: () -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onExportAll: () -> Unit,
     onImport: () -> Unit,
     showSnackbar: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val pullToRefreshState = rememberPullToRefreshState()
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -487,10 +510,10 @@ private fun HomePage(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("设置（后期）") },
+                    text = { Text("设置") },
                     onClick = {
                         scope.launch { drawerState.close() }
-                        showSnackbar("设置功能后期开放")
+                        onOpenSettings()
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -564,19 +587,31 @@ private fun HomePage(
                         modifier = Modifier.padding(vertical = 6.dp),
                     )
                 }
-                LazyColumn(
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    state = pullToRefreshState,
                     modifier = Modifier.fillMaxSize(),
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    indicator = {
+                        Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp)) {
+                            MemoryLoadingIndicator(modifier = Modifier.size(26.dp))
+                        }
+                    },
                 ) {
-                    items(state.timelineEntries, key = { it.id }) { entry ->
-                        EntryCard(
-                            entry = entry,
-                            onOpenDetail = { onOpenDetail(entry) },
-                            onEdit = { onEdit(entry) },
-                            onDelete = { onDelete(entry) },
-                            onExportSingle = { onExportSingle(entry) },
-                        )
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(state.timelineEntries, key = { it.id }) { entry ->
+                            EntryCard(
+                                entry = entry,
+                                onOpenDetail = { onOpenDetail(entry) },
+                                onEdit = { onEdit(entry) },
+                                onDelete = { onDelete(entry) },
+                                onExportSingle = { onExportSingle(entry) },
+                            )
+                        }
                     }
                 }
             }
@@ -594,7 +629,6 @@ private fun EntryCard(
     onExportSingle: () -> Unit,
 ) {
     var menuExpanded by remember(entry.id) { mutableStateOf(false) }
-    var expanded by rememberSaveable(entry.id) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -635,13 +669,10 @@ private fun EntryCard(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = entry.content,
-                maxLines = if (expanded) Int.MAX_VALUE else 5,
+                maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (!expanded && entry.content.isNotBlank()) {
-                TextButton(onClick = { expanded = true }) { Text("展开") }
-            }
             if (entry.mediaList.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -685,8 +716,14 @@ private fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
-                            .height(44.dp),
-                        placeholder = { Text("输入关键词...") },
+                            .heightIn(min = 52.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        placeholder = {
+                            Text(
+                                text = "输入关键词...",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (state.searchKeyword.isNotBlank()) {
@@ -992,10 +1029,45 @@ private fun writeTextToUri(context: Context, uri: Uri, value: String): Boolean =
     }.getOrDefault(false)
 
 private fun isCloudSyncedMediaUrl(uri: String): Boolean {
-    if (!(uri.startsWith("http://") || uri.startsWith("https://"))) return false
-    return uri.contains("owners/") && (
-        uri.contains("s3.") ||
-            uri.contains("cloud-kmp") ||
-            uri.contains("bitiful")
-        )
+    return uri.startsWith("http://") || uri.startsWith("https://")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScreen(
+    onBack: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("设置") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            ListItem(
+                headlineContent = { Text("同步策略") },
+                supportingContent = { Text("当前：有网络自动同步，可在侧边栏手动立即同步") },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("数据导出/导入") },
+                supportingContent = { Text("可在侧边栏导出全部 JSON 或导入 JSON") },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("云端状态标识") },
+                supportingContent = { Text("右上角“云端”图标表示媒体地址已是远程链接") },
+            )
+        }
+    }
 }

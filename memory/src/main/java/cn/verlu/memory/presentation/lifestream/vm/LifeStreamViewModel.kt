@@ -408,12 +408,7 @@ private fun countPendingMedia(entries: List<LifeEntry>): Int =
     }
 
 private fun isCloudSyncedMediaUrl(uri: String): Boolean {
-    if (!(uri.startsWith("http://") || uri.startsWith("https://"))) return false
-    return uri.contains("owners/") && (
-        uri.contains("s3.") ||
-            uri.contains("cloud-kmp") ||
-            uri.contains("bitiful")
-        )
+    return uri.startsWith("http://") || uri.startsWith("https://")
 }
 
 private fun parseInputTime(text: String): Long? =
