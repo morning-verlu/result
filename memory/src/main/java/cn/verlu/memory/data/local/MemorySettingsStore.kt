@@ -41,11 +41,13 @@ class MemorySettingsStore @Inject constructor(
     val cloudSyncEnabled: StateFlow<Boolean> = _cloudSyncEnabled.asStateFlow()
 
     fun setShowCloudBadge(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_SHOW_CLOUD_BADGE, enabled).apply()
+        _showCloudBadge.value = enabled
+        prefs.edit().putBoolean(KEY_SHOW_CLOUD_BADGE, enabled).commit()
     }
 
     fun setCloudSyncEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_CLOUD_SYNC_ENABLED, enabled).apply()
+        _cloudSyncEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_CLOUD_SYNC_ENABLED, enabled).commit()
     }
 
     fun isCloudSyncEnabled(): Boolean = prefs.getBoolean(KEY_CLOUD_SYNC_ENABLED, false)

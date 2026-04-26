@@ -19,3 +19,17 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ---- Memory module keep rules (release stability) ----
+
+# Keep Kotlinx Serialization generated serializers and metadata used by reflection.
+-keep class kotlinx.serialization.** { *; }
+-keepclassmembers class **$$serializer { *; }
+-keepclassmembers class **$Companion { *; }
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Keep Memory domain/data models used in Room/Supabase payload serialization.
+-keep class cn.verlu.memory.domain.model.** { *; }
+-keep class cn.verlu.memory.data.local.entity.** { *; }

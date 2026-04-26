@@ -16,6 +16,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
+import java.net.UnknownHostException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,6 +94,7 @@ class LifeStreamViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LifeStreamUiState())
     val uiState: StateFlow<LifeStreamUiState> = _uiState.asStateFlow()
     private var hasBootstrappedFromLocal = false
+    private var lastHomeEmptyRefreshAt = 0L
 
     init {
         MemoryLog.d(TAG, "init")
@@ -143,8 +145,8 @@ class LifeStreamViewModel @Inject constructor(
                 .onFailure {
                     MemoryLog.w(TAG, "bootstrap remote refresh failed", it)
                     _uiState.update {
-                        it.copy(
-                            message = "加载失败，请下拉重试",
+                        state -> state.copy(
+                            message = friendlyErrorMessage(it, "加载失败，请下拉重试"),
                             isError = true,
                         )
                     }
@@ -166,14 +168,38 @@ class LifeStreamViewModel @Inject constructor(
                 .onFailure {
                     MemoryLog.w(TAG, "refresh failed", it)
                     _uiState.update {
-                        it.copy(
+                        state -> state.copy(
                             isBusy = false,
                             isInitialLoading = false,
+                            message = friendlyErrorMessage(it, "加载失败，请下拉重试"),
+                            isError = true,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun refreshOnHomeVisibleIfEmpty() {
+        val snapshot = uiState.value
+        if (snapshot.timelineEntries.isNotEmpty() || snapshot.isBusy || snapshot.isInitialLoading) return
+        val now = System.currentTimeMillis()
+        if (now - lastHomeEmptyRefreshAt < 1_500L) return
+        lastHomeEmptyRefreshAt = now
+        viewModelScope.launch {
+            MemoryLog.d(TAG, "refreshOnHomeVisibleIfEmpty start")
+            _uiState.update { it.copy(isInitialLoading = true) }
+            runCatching { repository.getAll() }
+                .onSuccess { MemoryLog.d(TAG, "refreshOnHomeVisibleIfEmpty success") }
+                .onFailure {
+                    MemoryLog.w(TAG, "refreshOnHomeVisibleIfEmpty failed", it)
+                    _uiState.update {
+                        it.copy(
                             message = "加载失败，请下拉重试",
                             isError = true,
                         )
                     }
                 }
+            _uiState.update { it.copy(isInitialLoading = false) }
         }
     }
 
@@ -346,7 +372,7 @@ class LifeStreamViewModel @Inject constructor(
                 }
             }.onFailure {
                 MemoryLog.w(TAG, "saveRecord failed id=${entryId.take(8)}", it)
-                emitError(it.message ?: "保存失败，请稍后重试")
+                emitError(friendlyErrorMessage(it, "保存失败，请稍后重试"))
             }
             _uiState.update { it.copy(isSavingRecord = false) }
         }
@@ -430,7 +456,7 @@ class LifeStreamViewModel @Inject constructor(
                 }
                 .onFailure {
                     MemoryLog.w(TAG, "syncNow failed", it)
-                    emitError(it.message ?: "同步失败，请稍后重试")
+                    emitError(friendlyErrorMessage(it, "同步失败，请稍后重试"))
                 }
         }
     }
@@ -459,7 +485,7 @@ class LifeStreamViewModel @Inject constructor(
                 }
                 .onFailure {
                     MemoryLog.w(TAG, "syncSingleEntry failed id=${entryId.take(8)}", it)
-                    emitError(it.message ?: "同步失败，请稍后重试")
+                    emitError(friendlyErrorMessage(it, "同步失败，请稍后重试"))
                 }
         }
     }
@@ -486,6 +512,14 @@ class LifeStreamViewModel @Inject constructor(
 
     private fun emitError(message: String) {
         _uiState.update { it.copy(message = message, isError = true) }
+    }
+
+    private fun friendlyErrorMessage(error: Throwable, fallback: String): String {
+        val message = error.message.orEmpty().lowercase()
+        val unreachable = error is UnknownHostException ||
+            message.contains("unable to resolve host") ||
+            message.contains("unknownhost")
+        return if (unreachable) "网络不可达，请稍候重试" else fallback
     }
 
 }

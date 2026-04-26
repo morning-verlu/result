@@ -45,6 +45,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -565,6 +566,7 @@ class FileLifeStreamRepository(
 
     private suspend fun fetchRemoteEntriesOrNull(userId: String): RemotePayload? {
         return runCatching {
+            withNetworkRetry("fetch-remote") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].select {
                 filter { eq("user_id", userId) }
                 order("created_at_epoch_ms", Order.DESCENDING)
@@ -582,6 +584,7 @@ class FileLifeStreamRepository(
                     .map { it.toDomain() }
                 RemotePayload(entries = entries, tombstones = tombstones)
             }
+            }
         }.onFailure {
             MemoryLog.w(TAG, "fetch remote entries failed", it)
         }.getOrNull()
@@ -590,12 +593,14 @@ class FileLifeStreamRepository(
     private suspend fun upsertRemoteEntry(entry: LifeEntry): Boolean {
         val userId = supabase.auth.currentUserOrNull()?.id ?: return false
         return runCatching {
+            withNetworkRetry("upsert-entry:${entry.id.take(8)}") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].upsert(
                 listOf(
                     entry.toRow(userId = userId),
                 ),
             ) {
                 onConflict = "user_id,entry_id"
+            }
             }
             true
         }.onFailure {
@@ -606,6 +611,7 @@ class FileLifeStreamRepository(
     private suspend fun upsertRemoteTombstone(entryId: String, deletedAtEpochMs: Long) {
         val userId = supabase.auth.currentUserOrNull()?.id ?: return
         runCatching {
+            withNetworkRetry("upsert-tombstone:${entryId.take(8)}") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].upsert(
                 listOf(
                     MemoryEntryRow(
@@ -622,6 +628,7 @@ class FileLifeStreamRepository(
             ) {
                 onConflict = "user_id,entry_id"
             }
+            }
         }.onFailure {
             MemoryLog.w(TAG, "upsert remote tombstone failed: $entryId", it)
         }
@@ -636,10 +643,12 @@ class FileLifeStreamRepository(
         if (local.isEmpty()) return
         runCatching {
             val rows = local.map { it.toRow(userId) }
+            withNetworkRetry("sync-local-entries") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].upsert(
                 rows,
             ) {
                 onConflict = "user_id,entry_id"
+            }
             }
         }.onFailure {
             MemoryLog.w(TAG, "sync local entries to remote failed", it)
@@ -661,10 +670,12 @@ class FileLifeStreamRepository(
                     deletedAtEpochMs = tombstone.deletedAtEpochMs,
                 )
             }
+            withNetworkRetry("sync-local-tombstones") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].upsert(
                 rows,
             ) {
                 onConflict = "user_id,entry_id"
+            }
             }
         }.onFailure {
             MemoryLog.w(TAG, "sync local tombstones to remote failed", it)
@@ -820,15 +831,45 @@ class FileLifeStreamRepository(
         val cutoff = System.currentTimeMillis() - TOMBSTONE_TTL_MS
         MemoryLog.d(TAG, "[tombstone-clean] user=${userId.take(8)} cutoff=$cutoff")
         runCatching {
+            withNetworkRetry("delete-expired-tombstones") {
             supabase.postgrest[TABLE_MEMORY_ENTRIES].delete {
                 filter {
                     eq("user_id", userId)
                     lt("deleted_at_epoch_ms", cutoff)
                 }
             }
+            }
         }.onFailure {
             MemoryLog.w(TAG, "delete expired remote tombstones failed", it)
         }
+    }
+
+    private suspend fun <T> withNetworkRetry(
+        label: String,
+        maxAttempts: Int = 3,
+        block: suspend () -> T,
+    ): T {
+        var lastError: Throwable? = null
+        repeat(maxAttempts) { attempt ->
+            runCatching { return block() }
+                .onFailure { error ->
+                    lastError = error
+                    val shouldRetry = attempt < maxAttempts - 1 && isRetryableNetworkError(error)
+                    if (shouldRetry) {
+                        MemoryLog.w(TAG, "[$label] network retry ${attempt + 1}/$maxAttempts", error)
+                        delay((attempt + 1) * 500L)
+                    }
+                }
+        }
+        throw (lastError ?: IllegalStateException("[$label] unknown network retry failure"))
+    }
+
+    private fun isRetryableNetworkError(error: Throwable): Boolean {
+        val text = error.message.orEmpty().lowercase()
+        return text.contains("unable to resolve host") ||
+            text.contains("unknownhost") ||
+            text.contains("timeout") ||
+            text.contains("socket")
     }
 
     private fun newTraceId(prefix: String): String = "$prefix-${System.currentTimeMillis().toString().takeLast(6)}"

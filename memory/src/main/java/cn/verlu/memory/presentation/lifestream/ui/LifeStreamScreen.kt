@@ -230,6 +230,11 @@ fun LifeStreamScreen(
 
     when (route) {
         LifeStreamRoute.Home -> {
+            LaunchedEffect(route, state.timelineEntries.isEmpty()) {
+                if (state.timelineEntries.isEmpty()) {
+                    viewModel.refreshOnHomeVisibleIfEmpty()
+                }
+            }
             HomePage(
                 state = state,
                 avatarUrl = avatarUrl,
