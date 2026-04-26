@@ -42,10 +42,17 @@ android {
     }
 }
 
+// Room 在编译时将当前 schema 导出为 JSON 文件到 schemas/ 目录，
+// 方便后续写迁移脚本时对比新旧版本之间的字段变化。
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core.splashscreen)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

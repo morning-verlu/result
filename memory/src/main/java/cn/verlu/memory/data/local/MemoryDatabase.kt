@@ -9,8 +9,8 @@ import cn.verlu.memory.data.local.entity.TombstoneEntity
 
 @Database(
     entities = [MemoryEntryEntity::class, TombstoneEntity::class],
-    version = 3,
-    exportSchema = false,
+    version = 4,
+    exportSchema = true,
 )
 abstract class MemoryDatabase : RoomDatabase() {
     abstract fun memoryEntryDao(): MemoryEntryDao

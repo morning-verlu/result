@@ -2,6 +2,8 @@ package cn.verlu.memory.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import cn.verlu.memory.data.local.MemoryDatabase
 import cn.verlu.memory.data.local.MemorySettingsStore
 import cn.verlu.memory.data.local.dao.MemoryEntryDao
@@ -41,7 +43,7 @@ object AppModule {
         context,
         MemoryDatabase::class.java,
         "memory.db",
-    ).fallbackToDestructiveMigration(dropAllTables = true).build()
+    ).addMigrations(MIGRATION_3_4).build()
 
     @Provides
     @Singleton
@@ -97,4 +99,14 @@ object AppModule {
         tombstoneDao = tombstoneDao,
         settingsStore = settingsStore,
     )
+}
+
+/**
+ * v3 → v4：schema 不变，只是建立显式迁移机制以保护现有数据。
+ * 未来修改 schema 时，在此文件添加新的 Migration 并在 addMigrations() 里注册。
+ */
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // schema 不变，无需操作
+    }
 }

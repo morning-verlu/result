@@ -1,6 +1,7 @@
 package cn.verlu.memory.presentation.lifestream.ui
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -41,7 +42,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Delete
@@ -135,7 +135,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.URL
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDateTime
@@ -1068,24 +1067,25 @@ private fun DetailScreen(
     }
 }
 
+/**
+ * 视频缩略图数据（封面 + 时长文字），放在进程级 LruCache 里，
+ * 导航返回时 initialValue 直接命中内存，不再从 null 开始。
+ */
+private data class VideoThumbData(val bitmap: android.graphics.Bitmap, val duration: String?)
+private val videoThumbCache = android.util.LruCache<String, VideoThumbData>(30)
+
 @Composable
 private fun MediaThumb(
     media: LifeMedia,
     onImageClick: (() -> Unit)? = null,
     onVideoClick: ((String) -> Unit)? = null,
 ) {
-    val cachedMediaUri by rememberCachedMediaUri(
-        uri = media.uri,
-        mimeType = media.mimeType,
-    )
-    val videoDurationText by rememberVideoDurationText(
-        uri = cachedMediaUri,
-        mimeType = media.mimeType,
-    )
     Box {
         if (media.mimeType?.startsWith("image/") == true) {
+            // 直接把原始 URI 交给 Coil：Coil 有内存缓存（key=URI）+ 磁盘缓存，
+            // 导航返回时同一个 URI 命中内存缓存，直接显示，无闪烁。
             AsyncImage(
-                model = cachedMediaUri,
+                model = media.uri,
                 contentDescription = null,
                 modifier = Modifier
                     .size(84.dp)
@@ -1094,67 +1094,69 @@ private fun MediaThumb(
                     },
             )
         } else {
+            val context = LocalContext.current
+            // initialValue 直接从内存缓存取，导航返回时立即显示已有数据
+            val thumbState = produceState(
+                initialValue = videoThumbCache.get(media.uri),
+                key1 = media.uri,
+            ) {
+                if (value != null) return@produceState
+                value = withContext(Dispatchers.IO) {
+                    loadVideoThumbData(context, media.uri)
+                }
+            }
+            val thumbData = thumbState.value
             Card(
                 modifier = Modifier
                     .size(84.dp)
                     .let { base ->
                         if (onVideoClick != null) {
-                            base.clickable(onClick = { onVideoClick(cachedMediaUri) })
+                            base.clickable(onClick = { onVideoClick(media.uri) })
                         } else {
                             base
                         }
                     },
                 colors = CardDefaults.cardColors(),
             ) {
-                VideoThumbContent(cachedMediaUri)
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 主流视频卡片表现：暗遮罩 + 中心播放按钮 + 左上角视频标签
+                    if (thumbData != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = thumbData.bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null)
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.26f)),
                     )
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.PlayCircleFilled,
-                            contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(30.dp),
-                        )
-                    }
-                    Row(
+                    Icon(
+                        Icons.Default.PlayCircleFilled,
+                        contentDescription = null,
+                        tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .clip(CircleShape)
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Videocam,
-                            contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(10.dp),
-                        )
+                            .size(30.dp)
+                            .align(Alignment.Center),
+                    )
+                    if (thumbData?.duration != null) {
                         Text(
-                            text = "视频",
-                            color = androidx.compose.ui.graphics.Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                    if (videoDurationText != null) {
-                        Text(
-                            text = videoDurationText.orEmpty(),
+                            text = thumbData.duration,
                             color = androidx.compose.ui.graphics.Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(6.dp)
-                                .clip(CircleShape)
-                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                .padding(end = 2.dp, bottom = 2.dp),
                         )
                     }
                 }
@@ -1285,45 +1287,60 @@ private fun RecordScreen(
     }
 }
 
-@Composable
-private fun VideoThumbContent(uri: String) {
-    val context = LocalContext.current
-    val bitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, key1 = uri) {
-        value = withContext(Dispatchers.IO) {
+/**
+ * 加载视频缩略图（封面帧 + 时长）：
+ * 优先读内存缓存 → 磁盘缓存（JPEG） → MediaMetadataRetriever 提取。
+ * 提取后同时写入内存和磁盘缓存，一次 retriever 同时拿到封面和时长。
+ */
+private fun loadVideoThumbData(context: Context, uri: String): VideoThumbData? {
+    // 1. 磁盘缓存命中
+    val cacheFile = videoThumbDiskFile(context, uri)
+    val durFile = File(cacheFile.parent, cacheFile.nameWithoutExtension + ".dur")
+    if (cacheFile.exists() && cacheFile.length() > 0) {
+        val cached = runCatching { BitmapFactory.decodeFile(cacheFile.absolutePath) }.getOrNull()
+        if (cached != null) {
+            val dur = runCatching { durFile.readText().ifBlank { null } }.getOrNull()
+            val data = VideoThumbData(cached, dur)
+            videoThumbCache.put(uri, data)
+            return data
+        }
+    }
+    // 2. 提取帧（frame + duration 一次完成）
+    return runCatching {
+        val retriever = MediaMetadataRetriever()
+        try {
+            val parsed = Uri.parse(uri)
+            if (parsed.scheme == "http" || parsed.scheme == "https") {
+                retriever.setDataSource(uri, emptyMap())
+            } else {
+                retriever.setDataSource(context, parsed)
+            }
+            val rawBitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: return@runCatching null
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+            val duration = durationMs?.let { formatVideoDuration(it) }
+            // 缩放到 252px 节省内存和磁盘
+            val thumb = android.graphics.Bitmap.createScaledBitmap(rawBitmap, 252, 252, true)
+            if (thumb !== rawBitmap) rawBitmap.recycle()
+            // 3. 写磁盘缓存
             runCatching {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    val parsed = Uri.parse(uri)
-                    if (parsed.scheme == "http" || parsed.scheme == "https") {
-                        retriever.setDataSource(uri, emptyMap())
-                    } else {
-                        retriever.setDataSource(context, parsed)
-                    }
-                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                } finally {
-                    runCatching { retriever.release() }
-                }
-            }.getOrNull()
+                cacheFile.parentFile?.mkdirs()
+                cacheFile.outputStream().use { thumb.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+                if (duration != null) durFile.writeText(duration) else durFile.delete()
+            }
+            val data = VideoThumbData(thumb, duration)
+            videoThumbCache.put(uri, data)
+            data
+        } finally {
+            runCatching { retriever.release() }
         }
-    }
-    val bmp = bitmapState.value
-    if (bmp != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.Videocam, contentDescription = null)
-        }
-    }
+    }.getOrNull()
+}
+
+private fun videoThumbDiskFile(context: Context, uri: String): File {
+    val dir = File(context.cacheDir, "memory-video-thumb").apply { mkdirs() }
+    return File(dir, "${sha256(uri).take(24)}.jpg")
 }
 
 @Composable
@@ -1381,89 +1398,7 @@ private fun VideoPlayerDialog(
     }
 }
 
-@Composable
-private fun rememberCachedMediaUri(
-    uri: String,
-    mimeType: String?,
-): androidx.compose.runtime.State<String> {
-    val context = LocalContext.current
-    val existingLocal = remember(uri, mimeType) { findCachedMediaUriIfExists(context, uri, mimeType) }
-    return produceState(initialValue = existingLocal ?: uri, key1 = uri, key2 = mimeType) {
-        if (existingLocal != null) return@produceState
-        value = withContext(Dispatchers.IO) {
-            cacheMediaLocally(context, uri, mimeType)
-        }
-    }
-}
 
-private fun findCachedMediaUriIfExists(context: Context, uri: String, mimeType: String?): String? {
-    val parsed = Uri.parse(uri)
-    val scheme = parsed.scheme.orEmpty().lowercase()
-    if (scheme != "http" && scheme != "https") return uri
-    val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
-    val target = File(cacheDir, buildCacheFileName(uri, mimeType))
-    return if (target.exists() && target.length() > 0L) target.toURI().toString() else null
-}
-
-private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?): String {
-    val parsed = Uri.parse(uri)
-    val scheme = parsed.scheme.orEmpty().lowercase()
-    if (scheme != "http" && scheme != "https") return uri
-    val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
-    val target = File(cacheDir, buildCacheFileName(uri, mimeType))
-    if (target.exists() && target.length() > 0L) {
-        return target.toURI().toString()
-    }
-    return runCatching {
-        URL(uri).openStream().use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        }
-        target.toURI().toString()
-    }.getOrElse { uri }
-}
-
-private fun buildCacheFileName(uri: String, mimeType: String?): String {
-    val ext = when {
-        mimeType?.startsWith("image/") == true -> mimeType.substringAfter("image/", "img")
-        mimeType?.startsWith("video/") == true -> mimeType.substringAfter("video/", "mp4")
-        uri.contains(".") -> uri.substringAfterLast(".").substringBefore("?").takeIf { it.isNotBlank() } ?: "bin"
-        else -> "bin"
-    }
-    return "${sha256(uri)}.$ext"
-}
-
-@Composable
-private fun rememberVideoDurationText(
-    uri: String,
-    mimeType: String?,
-): androidx.compose.runtime.State<String?> {
-    val context = LocalContext.current
-    return produceState<String?>(initialValue = null, key1 = uri, key2 = mimeType) {
-        if (mimeType?.startsWith("video/") != true) {
-            value = null
-            return@produceState
-        }
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    val parsed = Uri.parse(uri)
-                    if (parsed.scheme == "http" || parsed.scheme == "https") {
-                        retriever.setDataSource(uri, emptyMap())
-                    } else {
-                        retriever.setDataSource(context, parsed)
-                    }
-                    val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                        ?.toLongOrNull()
-                        ?: return@runCatching null
-                    formatVideoDuration(durationMs)
-                } finally {
-                    runCatching { retriever.release() }
-                }
-            }.getOrNull()
-        }
-    }
-}
 
 private fun formatVideoDuration(durationMs: Long): String {
     val totalSeconds = durationMs / 1000

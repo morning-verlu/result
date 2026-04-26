@@ -108,7 +108,6 @@ fun MemoryNavApp(
             if (justLoggedIn && isAuthSubFlow(current)) {
                 while (backStack.isNotEmpty()) backStack.removeLastOrNull()
                 backStack.add(MemoryRoute.Home)
-                snackbarHostState.showSnackbar("授权登录成功 🎉")
             }
             return@LaunchedEffect
         }

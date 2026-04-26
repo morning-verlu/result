@@ -7,9 +7,12 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import cn.verlu.memory.presentation.auth.vm.AuthEventManager
+import cn.verlu.memory.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.memory.presentation.navigation.MemoryNavApp
 import cn.verlu.memory.ui.theme.SyncTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -22,8 +25,20 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var supabase: SupabaseClient
 
+    // 用 viewModels() 提前拿到 ViewModel，以便在 setContent 之前订阅状态
+    private val authSessionViewModel: AuthSessionViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // installSplashScreen 必须在 super.onCreate 之后、setContent 之前调用
+        val splashScreen = installSplashScreen()
+
         super.onCreate(savedInstanceState)
+
+        // 保持 Splash 显示，直到认证状态初始化完成
+        splashScreen.setKeepOnScreenCondition {
+            authSessionViewModel.state.value.isInitializing
+        }
+
         enableEdgeToEdge()
         logAuthCallback(intent.data)
         supabase.handleDeeplinks(intent)

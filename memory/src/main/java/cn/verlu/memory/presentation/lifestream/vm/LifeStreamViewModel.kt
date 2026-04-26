@@ -276,10 +276,6 @@ class LifeStreamViewModel @Inject constructor(
         _uiState.update { it.copy(draftContent = value) }
     }
 
-    fun updateDraftTimeText(value: String) {
-        _uiState.update { it.copy(draftTimeText = value) }
-    }
-
     fun appendMedia(uri: String, mimeType: String?) {
         _uiState.update { it.copy(draftMediaList = it.draftMediaList + LifeMedia(uri = uri, mimeType = mimeType)) }
     }
