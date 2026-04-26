@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +19,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +45,7 @@ import cn.verlu.memory.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.memory.presentation.lifestream.ui.LifeStreamRoute
 import cn.verlu.memory.presentation.lifestream.ui.LifeStreamScreen
 import cn.verlu.memory.presentation.update.AppUpdateGate
+import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 
 private fun isAuthSubFlow(route: NavKey?): Boolean {
@@ -110,7 +113,7 @@ fun MemoryNavApp(
             return@LaunchedEffect
         }
 
-        val current = backStack.lastOrNull() as? MemoryRoute
+        val current = backStack.lastOrNull()
         if (isAuthSubFlow(current)) return@LaunchedEffect
         while (backStack.isNotEmpty()) backStack.removeLastOrNull()
         backStack.add(MemoryRoute.Auth)
@@ -120,7 +123,7 @@ fun MemoryNavApp(
         Scaffold(
             modifier = modifier,
             containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets(0),
+            contentWindowInsets = WindowInsets(0.dp),
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { snackbarPadding ->
             if (showUpdatePasswordDialog) {
@@ -265,12 +268,12 @@ private fun AuthLandingWithShell(
     onOpenEmailLogin: () -> Unit,
     onOpenEmailRegister: () -> Unit,
 ) {
-    val topAppBarState = androidx.compose.material3.rememberTopAppBarState()
-    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
+    val topAppBarState = rememberTopAppBarState()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             LargeTopAppBar(
                 title = { Text("登录") },
@@ -312,9 +315,9 @@ private fun AuthEmailWithShell(
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text("邮箱") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -345,9 +348,9 @@ private fun AuthPasswordWithShell(
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0),
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text("密码") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
