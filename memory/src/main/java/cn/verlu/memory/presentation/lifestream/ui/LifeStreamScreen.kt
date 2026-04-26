@@ -1106,42 +1106,26 @@ private fun MediaThumb(
                     },
                 colors = CardDefaults.cardColors(),
             ) {
-                VideoThumbContent(cachedMediaUri)
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 主流视频卡片表现：暗遮罩 + 中心播放按钮 + 左上角视频标签
+                    VideoThumbContent(cachedMediaUri)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.26f)),
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.34f)),
                     )
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
                             Icons.Default.PlayCircleFilled,
                             contentDescription = null,
                             tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(30.dp),
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .clip(CircleShape)
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Videocam,
-                            contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(10.dp),
-                        )
-                        Text(
-                            text = "视频",
-                            color = androidx.compose.ui.graphics.Color.White,
-                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
                     if (videoDurationText != null) {
@@ -1153,7 +1137,7 @@ private fun MediaThumb(
                                 .align(Alignment.BottomEnd)
                                 .padding(6.dp)
                                 .clip(CircleShape)
-                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.62f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
