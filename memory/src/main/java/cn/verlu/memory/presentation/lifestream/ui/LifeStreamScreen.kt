@@ -1106,26 +1106,42 @@ private fun MediaThumb(
                     },
                 colors = CardDefaults.cardColors(),
             ) {
+                VideoThumbContent(cachedMediaUri)
                 Box(modifier = Modifier.fillMaxSize()) {
-                    VideoThumbContent(cachedMediaUri)
+                    // 主流视频卡片表现：暗遮罩 + 中心播放按钮 + 左上角视频标签
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.34f)),
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.26f)),
                     )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.PlayCircleFilled,
                             contentDescription = null,
                             tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(CircleShape)
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Videocam,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(10.dp),
+                        )
+                        Text(
+                            text = "视频",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                     if (videoDurationText != null) {
@@ -1137,7 +1153,7 @@ private fun MediaThumb(
                                 .align(Alignment.BottomEnd)
                                 .padding(6.dp)
                                 .clip(CircleShape)
-                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.62f))
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
@@ -1386,7 +1402,7 @@ private fun findCachedMediaUriIfExists(context: Context, uri: String, mimeType: 
     if (scheme != "http" && scheme != "https") return uri
     val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
     val target = File(cacheDir, buildCacheFileName(uri, mimeType))
-    return if (target.exists() && target.length() > 0L) Uri.fromFile(target).toString() else null
+    return if (target.exists() && target.length() > 0L) target.toURI().toString() else null
 }
 
 private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?): String {
@@ -1396,13 +1412,13 @@ private fun cacheMediaLocally(context: Context, uri: String, mimeType: String?):
     val cacheDir = File(context.cacheDir, "memory-media-cache").apply { mkdirs() }
     val target = File(cacheDir, buildCacheFileName(uri, mimeType))
     if (target.exists() && target.length() > 0L) {
-        return Uri.fromFile(target).toString()
+        return target.toURI().toString()
     }
     return runCatching {
         URL(uri).openStream().use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         }
-        Uri.fromFile(target).toString()
+        target.toURI().toString()
     }.getOrElse { uri }
 }
 
