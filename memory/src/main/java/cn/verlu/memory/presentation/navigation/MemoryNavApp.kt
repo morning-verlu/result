@@ -40,6 +40,7 @@ import cn.verlu.memory.presentation.auth.ui.UpdatePasswordDialog
 import cn.verlu.memory.presentation.auth.vm.AuthEventManager
 import cn.verlu.memory.presentation.auth.vm.AuthSessionViewModel
 import cn.verlu.memory.presentation.lifestream.ui.LifeStreamScreen
+import cn.verlu.memory.presentation.update.AppUpdateGate
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -108,6 +109,9 @@ fun MemoryNavApp(
                     onDismiss = { AuthEventManager.showPasswordResetDialog.value = false },
                 )
             }
+            AppUpdateGate(
+                showMessage = { snackbarHostState.showSnackbar(it) },
+            )
             AuthSessionLoadingOverlay(modifier = Modifier.fillMaxSize())
             NavDisplay(
                 backStack = backStack,
