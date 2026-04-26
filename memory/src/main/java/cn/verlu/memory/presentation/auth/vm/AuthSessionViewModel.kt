@@ -28,16 +28,8 @@ class AuthSessionViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(AuthSessionState())
     val state: StateFlow<AuthSessionState> = _state.asStateFlow()
-    private var seenInitializing = false
-    private var forceSignedOut = false
 
     fun signOut() {
-        forceSignedOut = true
-        _state.value = AuthSessionState(
-            isInitializing = false,
-            isAuthenticated = false,
-            user = null,
-        )
         viewModelScope.launch {
             runCatching { supabase.auth.signOut() }
         }
@@ -45,11 +37,11 @@ class AuthSessionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            var wasInitializing = true
             supabase.auth.sessionStatus.collectLatest { sessionStatus ->
                 when (sessionStatus) {
                     is SessionStatus.Authenticated -> {
-                        forceSignedOut = false
-                        seenInitializing = false
+                        wasInitializing = false
                         _state.value = AuthSessionState(
                             isInitializing = false,
                             isAuthenticated = true,
@@ -57,7 +49,7 @@ class AuthSessionViewModel @Inject constructor(
                         )
                     }
                     SessionStatus.Initializing -> {
-                        seenInitializing = true
+                        wasInitializing = true
                         _state.value = AuthSessionState(
                             isInitializing = true,
                             isAuthenticated = false,
@@ -65,26 +57,12 @@ class AuthSessionViewModel @Inject constructor(
                         )
                     }
                     else -> {
-                        if (forceSignedOut) {
-                            forceSignedOut = false
-                            seenInitializing = false
-                            _state.value = AuthSessionState(
-                                isInitializing = false,
-                                isAuthenticated = false,
-                                user = null,
-                            )
-                            return@collectLatest
-                        }
-                        if (seenInitializing) {
-                            // 冷启动瞬时未登录抖动在 VM 层防抖，避免 UI/Nav 写 delay 补丁。
-                            delay(500)
-                        }
-                        val currentUser = supabase.auth.currentUserOrNull()
-                        seenInitializing = false
+                        if (wasInitializing) delay(500)
+                        wasInitializing = false
                         _state.value = AuthSessionState(
                             isInitializing = false,
-                            isAuthenticated = currentUser != null,
-                            user = currentUser,
+                            isAuthenticated = false,
+                            user = null,
                         )
                     }
                 }

@@ -85,18 +85,6 @@ fun AuthRoute(
         }
     }
 
-    LaunchedEffect(state.error, state.info) {
-        state.error?.let {
-            scope.launch { snackbar.showSnackbar(it) }
-            viewModel.clearMessage()
-            return@LaunchedEffect
-        }
-        state.info?.let {
-            scope.launch { snackbar.showSnackbar(it) }
-            viewModel.clearMessage()
-        }
-    }
-
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
