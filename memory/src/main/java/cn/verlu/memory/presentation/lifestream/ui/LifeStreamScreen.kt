@@ -69,6 +69,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -135,6 +136,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URL
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDateTime
@@ -352,8 +354,10 @@ fun LifeStreamScreen(
                 onBack = onBack,
                 showCloudBadge = state.showCloudBadge,
                 cloudSyncEnabled = state.cloudSyncEnabled,
+                mediaCdnBaseUrl = state.mediaCdnBaseUrl,
                 onShowCloudBadgeChange = viewModel::setShowCloudBadge,
                 onCloudSyncEnabledChange = viewModel::setCloudSyncEnabled,
+                onMediaCdnBaseUrlChange = viewModel::setMediaCdnBaseUrl,
                 onOpenSyncDebugPanel = { showSyncDebugPanel = true },
             )
         }
@@ -1075,17 +1079,32 @@ private data class VideoThumbData(val bitmap: android.graphics.Bitmap, val durat
 private val videoThumbCache = android.util.LruCache<String, VideoThumbData>(30)
 
 @Composable
+private fun rememberResolvedImageUri(uri: String): androidx.compose.runtime.State<String> {
+    val context = LocalContext.current
+    val cacheKey = remember(uri) { stableMediaCacheKey(uri) }
+    val existing = remember(cacheKey, uri) { findCachedImageUriIfExists(context, cacheKey, uri) }
+    return produceState(initialValue = existing ?: uri, key1 = cacheKey, key2 = uri) {
+        if (existing != null) return@produceState
+        value = withContext(Dispatchers.IO) {
+            cacheImageLocally(context, cacheKey, uri)
+        }
+    }
+}
+
+@Composable
 private fun MediaThumb(
     media: LifeMedia,
     onImageClick: (() -> Unit)? = null,
     onVideoClick: ((String) -> Unit)? = null,
 ) {
+    val context = LocalContext.current
+    val resolvedImageUri by rememberResolvedImageUri(media.uri)
+    val thumbKey = remember(media.uri) { stableMediaCacheKey(media.uri) }
     Box {
         if (media.mimeType?.startsWith("image/") == true) {
-            // 直接把原始 URI 交给 Coil：Coil 有内存缓存（key=URI）+ 磁盘缓存，
-            // 导航返回时同一个 URI 命中内存缓存，直接显示，无闪烁。
+            // 优先使用本地落盘后的 URI，避免签名 URL 刷新导致重复请求。
             AsyncImage(
-                model = media.uri,
+                model = resolvedImageUri,
                 contentDescription = null,
                 modifier = Modifier
                     .size(84.dp)
@@ -1094,15 +1113,14 @@ private fun MediaThumb(
                     },
             )
         } else {
-            val context = LocalContext.current
             // initialValue 直接从内存缓存取，导航返回时立即显示已有数据
             val thumbState = produceState(
-                initialValue = videoThumbCache.get(media.uri),
-                key1 = media.uri,
+                initialValue = videoThumbCache.get(thumbKey),
+                key1 = thumbKey,
             ) {
                 if (value != null) return@produceState
                 value = withContext(Dispatchers.IO) {
-                    loadVideoThumbData(context, media.uri)
+                    loadVideoThumbData(context, thumbKey, media.uri)
                 }
             }
             val thumbData = thumbState.value
@@ -1292,16 +1310,16 @@ private fun RecordScreen(
  * 优先读内存缓存 → 磁盘缓存（JPEG） → MediaMetadataRetriever 提取。
  * 提取后同时写入内存和磁盘缓存，一次 retriever 同时拿到封面和时长。
  */
-private fun loadVideoThumbData(context: Context, uri: String): VideoThumbData? {
+private fun loadVideoThumbData(context: Context, thumbKey: String, uri: String): VideoThumbData? {
     // 1. 磁盘缓存命中
-    val cacheFile = videoThumbDiskFile(context, uri)
+    val cacheFile = videoThumbDiskFile(context, thumbKey)
     val durFile = File(cacheFile.parent, cacheFile.nameWithoutExtension + ".dur")
     if (cacheFile.exists() && cacheFile.length() > 0) {
         val cached = runCatching { BitmapFactory.decodeFile(cacheFile.absolutePath) }.getOrNull()
         if (cached != null) {
             val dur = runCatching { durFile.readText().ifBlank { null } }.getOrNull()
             val data = VideoThumbData(cached, dur)
-            videoThumbCache.put(uri, data)
+            videoThumbCache.put(thumbKey, data)
             return data
         }
     }
@@ -1330,7 +1348,7 @@ private fun loadVideoThumbData(context: Context, uri: String): VideoThumbData? {
                 if (duration != null) durFile.writeText(duration) else durFile.delete()
             }
             val data = VideoThumbData(thumb, duration)
-            videoThumbCache.put(uri, data)
+            videoThumbCache.put(thumbKey, data)
             data
         } finally {
             runCatching { retriever.release() }
@@ -1338,9 +1356,47 @@ private fun loadVideoThumbData(context: Context, uri: String): VideoThumbData? {
     }.getOrNull()
 }
 
-private fun videoThumbDiskFile(context: Context, uri: String): File {
+private fun videoThumbDiskFile(context: Context, thumbKey: String): File {
     val dir = File(context.cacheDir, "memory-video-thumb").apply { mkdirs() }
-    return File(dir, "${sha256(uri).take(24)}.jpg")
+    return File(dir, "${sha256(thumbKey).take(24)}.jpg")
+}
+
+private fun stableMediaCacheKey(uri: String): String {
+    val parsed = Uri.parse(uri)
+    val scheme = parsed.scheme.orEmpty().lowercase()
+    if (scheme != "http" && scheme != "https") return uri
+    val host = parsed.host.orEmpty().lowercase()
+    val path = parsed.encodedPath.orEmpty()
+    return if (host.isNotBlank() || path.isNotBlank()) "$host$path" else uri
+}
+
+private fun findCachedImageUriIfExists(context: Context, cacheKey: String, uri: String): String? {
+    val parsed = Uri.parse(uri)
+    val scheme = parsed.scheme.orEmpty().lowercase()
+    if (scheme != "http" && scheme != "https") return uri
+    val cacheFile = imageDiskCacheFile(context, cacheKey, uri)
+    return if (cacheFile.exists() && cacheFile.length() > 0L) cacheFile.toURI().toString() else null
+}
+
+private fun cacheImageLocally(context: Context, cacheKey: String, uri: String): String {
+    val parsed = Uri.parse(uri)
+    val scheme = parsed.scheme.orEmpty().lowercase()
+    if (scheme != "http" && scheme != "https") return uri
+    val cacheFile = imageDiskCacheFile(context, cacheKey, uri)
+    if (cacheFile.exists() && cacheFile.length() > 0L) return cacheFile.toURI().toString()
+    return runCatching {
+        URL(uri).openStream().use { input ->
+            cacheFile.parentFile?.mkdirs()
+            cacheFile.outputStream().use { output -> input.copyTo(output) }
+        }
+        cacheFile.toURI().toString()
+    }.getOrElse { uri }
+}
+
+private fun imageDiskCacheFile(context: Context, cacheKey: String, uri: String): File {
+    val dir = File(context.cacheDir, "memory-image-cache").apply { mkdirs() }
+    val ext = uri.substringAfterLast('.', "").substringBefore('?').ifBlank { "img" }
+    return File(dir, "${sha256(cacheKey).take(24)}.$ext")
 }
 
 @Composable
@@ -1449,13 +1505,17 @@ private fun SettingsScreen(
     onBack: () -> Unit,
     showCloudBadge: Boolean,
     cloudSyncEnabled: Boolean,
+    mediaCdnBaseUrl: String,
     onShowCloudBadgeChange: (Boolean) -> Unit,
     onCloudSyncEnabledChange: (Boolean) -> Unit,
+    onMediaCdnBaseUrlChange: (String) -> Unit,
     onOpenSyncDebugPanel: () -> Unit,
 ) {
     var versionTapCount by remember { mutableIntStateOf(0) }
     var lastVersionTapAt by remember { mutableLongStateOf(0L) }
     var showCloudEnableConfirmDialog by remember { mutableStateOf(false) }
+    var showCdnEditDialog by remember { mutableStateOf(false) }
+    var cdnInput by remember(mediaCdnBaseUrl) { mutableStateOf(mediaCdnBaseUrl) }
     val unlockTapTarget = 7
     val unlockWindowMs = 1_500L
 
@@ -1514,6 +1574,18 @@ private fun SettingsScreen(
             )
             HorizontalDivider()
             ListItem(
+                headlineContent = { Text("媒体 CDN 地址") },
+                supportingContent = {
+                    Text(
+                        if (mediaCdnBaseUrl.isBlank()) "未设置（将使用源站）" else mediaCdnBaseUrl,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                modifier = Modifier.clickable { showCdnEditDialog = true },
+            )
+            HorizontalDivider()
+            ListItem(
                 headlineContent = { Text("应用信息") },
                 supportingContent = {
                     val context = LocalContext.current
@@ -1538,6 +1610,34 @@ private fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCloudEnableConfirmDialog = false }) { Text("取消") }
+            },
+        )
+    }
+    if (showCdnEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showCdnEditDialog = false },
+            title = { Text("设置媒体 CDN 地址") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("示例：https://img.jkot.net（留空表示使用源站）")
+                    OutlinedTextField(
+                        value = cdnInput,
+                        onValueChange = { cdnInput = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onMediaCdnBaseUrlChange(cdnInput)
+                        showCdnEditDialog = false
+                    },
+                ) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCdnEditDialog = false }) { Text("取消") }
             },
         )
     }

@@ -44,6 +44,7 @@ data class LifeStreamUiState(
     val pendingSyncCount: Int = 0,
     val showCloudBadge: Boolean = true,
     val cloudSyncEnabled: Boolean = false,
+    val mediaCdnBaseUrl: String = "",
     val isInitialLoading: Boolean = false,
     val isSavingRecord: Boolean = false,
     val isBusy: Boolean = false,
@@ -113,6 +114,12 @@ class LifeStreamViewModel @Inject constructor(
             settingsStore.cloudSyncEnabled.collectLatest { enabled ->
                 MemoryLog.d(TAG, "settings cloudSyncEnabled=$enabled")
                 _uiState.update { it.copy(cloudSyncEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsStore.mediaCdnBaseUrl.collectLatest { value ->
+                MemoryLog.d(TAG, "settings mediaCdnBaseUrl=$value")
+                _uiState.update { it.copy(mediaCdnBaseUrl = value) }
             }
         }
     }
@@ -503,6 +510,16 @@ class LifeStreamViewModel @Inject constructor(
                     isError = false,
                 )
             }
+        }
+    }
+
+    fun setMediaCdnBaseUrl(baseUrl: String) {
+        settingsStore.setMediaCdnBaseUrl(baseUrl)
+        _uiState.update {
+            it.copy(
+                message = "CDN 地址已更新，后续媒体请求将使用新地址",
+                isError = false,
+            )
         }
     }
 

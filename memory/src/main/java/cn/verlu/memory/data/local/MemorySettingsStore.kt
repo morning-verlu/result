@@ -1,6 +1,7 @@
 package cn.verlu.memory.data.local
 
 import android.content.Context
+import cn.verlu.memory.data.remote.SupabaseConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,6 +17,7 @@ class MemorySettingsStore @Inject constructor(
         private const val PREFS = "memory_settings"
         private const val KEY_SHOW_CLOUD_BADGE = "show_cloud_badge"
         private const val KEY_CLOUD_SYNC_ENABLED = "cloud_sync_enabled"
+        private const val KEY_MEDIA_CDN_BASE_URL = "media_cdn_base_url"
     }
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -25,11 +27,18 @@ class MemorySettingsStore @Inject constructor(
     private val _cloudSyncEnabled = MutableStateFlow(
         prefs.getBoolean(KEY_CLOUD_SYNC_ENABLED, false),
     )
+    private val _mediaCdnBaseUrl = MutableStateFlow(
+        prefs.getString(KEY_MEDIA_CDN_BASE_URL, SupabaseConfig.DEFAULT_MEDIA_CDN_BASE_URL).orEmpty(),
+    )
 
     private val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             KEY_SHOW_CLOUD_BADGE -> _showCloudBadge.value = prefs.getBoolean(KEY_SHOW_CLOUD_BADGE, true)
             KEY_CLOUD_SYNC_ENABLED -> _cloudSyncEnabled.value = prefs.getBoolean(KEY_CLOUD_SYNC_ENABLED, false)
+            KEY_MEDIA_CDN_BASE_URL -> {
+                _mediaCdnBaseUrl.value =
+                    prefs.getString(KEY_MEDIA_CDN_BASE_URL, SupabaseConfig.DEFAULT_MEDIA_CDN_BASE_URL).orEmpty()
+            }
         }
     }
 
@@ -39,6 +48,7 @@ class MemorySettingsStore @Inject constructor(
 
     val showCloudBadge: StateFlow<Boolean> = _showCloudBadge.asStateFlow()
     val cloudSyncEnabled: StateFlow<Boolean> = _cloudSyncEnabled.asStateFlow()
+    val mediaCdnBaseUrl: StateFlow<String> = _mediaCdnBaseUrl.asStateFlow()
 
     fun setShowCloudBadge(enabled: Boolean) {
         _showCloudBadge.value = enabled
@@ -50,5 +60,13 @@ class MemorySettingsStore @Inject constructor(
         prefs.edit().putBoolean(KEY_CLOUD_SYNC_ENABLED, enabled).commit()
     }
 
+    fun setMediaCdnBaseUrl(baseUrl: String) {
+        val normalized = baseUrl.trim().trimEnd('/')
+        _mediaCdnBaseUrl.value = normalized
+        prefs.edit().putString(KEY_MEDIA_CDN_BASE_URL, normalized).commit()
+    }
+
     fun isCloudSyncEnabled(): Boolean = prefs.getBoolean(KEY_CLOUD_SYNC_ENABLED, false)
+    fun getMediaCdnBaseUrl(): String =
+        prefs.getString(KEY_MEDIA_CDN_BASE_URL, SupabaseConfig.DEFAULT_MEDIA_CDN_BASE_URL).orEmpty()
 }

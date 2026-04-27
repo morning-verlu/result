@@ -86,6 +86,9 @@ class FileLifeStreamRepository(
     }
     private val httpClient = HttpClient(OkHttp)
 
+    private fun mapMediaUrl(url: String): String =
+        SupabaseConfig.mapMediaUrl(url, settingsStore.getMediaCdnBaseUrl())
+
     override fun observeEntries(): Flow<List<LifeEntry>> =
         memoryEntryDao.observeAll().map { list -> list.map { it.toDomain() } }
 
@@ -343,7 +346,10 @@ class FileLifeStreamRepository(
                     fullPath = "owners/$userId/$objectPath",
                 )
                 MemoryLog.d(TAG, "upload success: $objectPath")
-                LifeMedia(uri = signedUrl, mimeType = stableMedia.mimeType)
+                LifeMedia(
+                    uri = mapMediaUrl(signedUrl),
+                    mimeType = stableMedia.mimeType,
+                )
             }.getOrElse {
                 MemoryLog.e(TAG, "upload failed: ${stableMedia.uri}", it)
                 stableMedia
@@ -581,7 +587,14 @@ class FileLifeStreamRepository(
                     }
                 val entries = rows
                     .filterNot { it.isDeleted }
-                    .map { it.toDomain() }
+                    .map { row ->
+                        val domain = row.toDomain()
+                        domain.copy(
+                            mediaList = domain.mediaList.map { media ->
+                                media.copy(uri = mapMediaUrl(media.uri))
+                            },
+                        )
+                    }
                 RemotePayload(entries = entries, tombstones = tombstones)
             }
             }
@@ -797,7 +810,9 @@ class FileLifeStreamRepository(
         syncState = runCatching { SyncState.valueOf(syncState) }.getOrDefault(SyncState.LOCAL_ONLY),
         retryCount = retryCount,
         type = runCatching { LifeEntryType.valueOf(type) }.getOrDefault(LifeEntryType.TEXT),
-        mediaList = runCatching { json.decodeFromString<List<LifeMedia>>(mediaListJson) }.getOrDefault(emptyList()),
+        mediaList = runCatching { json.decodeFromString<List<LifeMedia>>(mediaListJson) }
+            .getOrDefault(emptyList())
+            .map { media -> media.copy(uri = mapMediaUrl(media.uri)) },
     )
 
     @Serializable

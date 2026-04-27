@@ -18,8 +18,8 @@ android {
         applicationId = "cn.verlu.memory"
         minSdk = 31
         targetSdk = 36
-        versionCode = 2
-        versionName = "2026.4.26"
+        versionCode = 3
+        versionName = "2026.4.27"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
