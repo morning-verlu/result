@@ -1,0 +1,7 @@
+FrameLayout id=android:id/content bounds=[0,0][1080,2400]
+  EditText text="Tod20quick%20record%20Rom%%20h%20a%20longer%20body%20for%20detail" flags=clickable,long-clickable,focusable bounds=[32,231][1048,1454]
+  View flags=clickable,focusable bounds=[12,85][138,211]
+    View desc="取消" bounds=[43,116][106,179]
+  TextView text="记录" bounds=[148,106][262,188]
+  View flags=clickable,focusable bounds=[917,85][1069,211]
+    TextView text="保存" bounds=[957,121][1029,174]

@@ -1,0 +1,258 @@
+Activity Resolver Table:
+  Schemes:
+      verlusync:
+        220473a cn.verlu.sync/.MainActivity filter e4e2feb
+          Action: "android.intent.action.VIEW"
+          Category: "android.intent.category.DEFAULT"
+          Category: "android.intent.category.BROWSABLE"
+          Scheme: "verlusync"
+          Authority: "login": -1
+        220473a cn.verlu.sync/.MainActivity filter 4a63148
+          Action: "android.intent.action.VIEW"
+          Category: "android.intent.category.DEFAULT"
+          Category: "android.intent.category.BROWSABLE"
+          Scheme: "verlusync"
+          Authority: "authorize_sso": -1
+
+  Non-Data Actions:
+      android.intent.action.MAIN:
+        220473a cn.verlu.sync/.MainActivity filter 3771be1
+          Action: "android.intent.action.MAIN"
+          Category: "android.intent.category.LAUNCHER"
+
+Receiver Resolver Table:
+  Non-Data Actions:
+      androidx.profileinstaller.action.SAVE_PROFILE:
+        53b9d06 cn.verlu.sync/androidx.profileinstaller.ProfileInstallReceiver filter d68951d
+          Action: "androidx.profileinstaller.action.SAVE_PROFILE"
+      androidx.profileinstaller.action.INSTALL_PROFILE:
+        53b9d06 cn.verlu.sync/androidx.profileinstaller.ProfileInstallReceiver filter cdddfc7
+          Action: "androidx.profileinstaller.action.INSTALL_PROFILE"
+      androidx.profileinstaller.action.SKIP_FILE:
+        53b9d06 cn.verlu.sync/androidx.profileinstaller.ProfileInstallReceiver filter f9119f4
+          Action: "androidx.profileinstaller.action.SKIP_FILE"
+      androidx.profileinstaller.action.BENCHMARK_OPERATION:
+        53b9d06 cn.verlu.sync/androidx.profileinstaller.ProfileInstallReceiver filter 4648392
+          Action: "androidx.profileinstaller.action.BENCHMARK_OPERATION"
+
+Domain verification status:
+
+Permissions:
+  Permission [cn.verlu.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION] (721687e):
+    sourcePackage=cn.verlu.sync
+    uid=10646 gids=[] type=0 prot=signature
+    perm=PermissionInfo{68411df cn.verlu.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION}
+    flags=0x0
+
+Registered ContentProviders:
+  cn.verlu.sync/com.google.mlkit.common.internal.MlKitInitProvider:
+    Provider{527be2c cn.verlu.sync/com.google.mlkit.common.internal.MlKitInitProvider}
+  cn.verlu.sync/androidx.startup.InitializationProvider:
+    Provider{fe590f5 cn.verlu.sync/androidx.startup.InitializationProvider}
+
+ContentProvider Authorities:
+  [cn.verlu.sync.mlkitinitprovider]:
+    Provider{527be2c cn.verlu.sync/com.google.mlkit.common.internal.MlKitInitProvider}
+      applicationInfo=ApplicationInfo{9678e8a cn.verlu.sync}
+  [cn.verlu.sync.androidx-startup]:
+    Provider{fe590f5 cn.verlu.sync/androidx.startup.InitializationProvider}
+      applicationInfo=ApplicationInfo{741ecfb cn.verlu.sync}
+
+Key Set Manager:
+  [cn.verlu.sync]
+      Signing KeySets: 753
+
+Packages:
+  Package [cn.verlu.sync] (9dd2852):
+    appId=10646
+    pkg=Package{2689118 cn.verlu.sync}
+    codePath=/data/app/~~rdfttG3QtFdN4BvCnbgacg==/cn.verlu.sync-dGZVlK3MciMzn1cBmWIlPQ==
+    resourcePath=/data/app/~~rdfttG3QtFdN4BvCnbgacg==/cn.verlu.sync-dGZVlK3MciMzn1cBmWIlPQ==
+    legacyNativeLibraryDir=/data/app/~~rdfttG3QtFdN4BvCnbgacg==/cn.verlu.sync-dGZVlK3MciMzn1cBmWIlPQ==/lib
+    extractNativeLibs=false
+    primaryCpuAbi=arm64-v8a
+    secondaryCpuAbi=null
+    cpuAbiOverride=null
+    versionCode=9 minSdk=29 targetSdk=36
+    minExtensionVersions=[]
+    versionName=2026.4.14
+    hiddenApiEnforcementPolicy=2
+    usesNonSdkApi=false
+    splits=[base]
+    apkSigningVersion=2
+    flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP ]
+    privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE PARTIALLY_DIRECT_BOOT_AWARE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    forceQueryable=false
+    pageSizeCompat=0
+    scannedAsStoppedSystemApp=false
+    supportsScreens=[small, medium, large, xlarge, resizeable, anyDensity]
+    usesOptionalLibraries:
+      androidx.window.extensions
+      androidx.window.sidecar
+    usesLibraryFiles:
+      /system_ext/framework/androidx.window.extensions.jar
+      /system_ext/framework/androidx.window.sidecar.jar
+    timeStamp=2026-04-14 20:55:47
+    lastUpdateTime=2026-04-14 20:55:55
+    installerPackageName=com.android.packageinstaller
+    installerPackageUid=10198
+    initiatingPackageName=com.android.packageinstaller
+    originatingPackageName=com.android.chrome
+    packageSource=3
+    appMetadataFilePath=null
+    appMetadataSource=0
+    signatures=PackageSignatures{34b4771 version:2, signatures:[e10b303b], past signatures:[]}
+    installPermissionsFixed=false
+    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP ]
+    privatePkgFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE PARTIALLY_DIRECT_BOOT_AWARE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    apexModuleName=null
+    declared permissions:
+      cn.verlu.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION: prot=signature
+    requested permissions:
+      android.permission.ACCESS_FINE_LOCATION
+      android.permission.INTERNET
+      cn.verlu.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+      android.permission.PACKAGE_USAGE_STATS
+      android.permission.ACCESS_COARSE_LOCATION
+      android.permission.ACCESS_NETWORK_STATE
+      android.permission.CAMERA
+      android.permission.REQUEST_INSTALL_PACKAGES
+      android.permission.QUERY_ALL_PACKAGES
+    install permissions:
+      android.permission.INTERNET: granted=true
+      cn.verlu.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+      android.permission.QUERY_ALL_PACKAGES: granted=true
+    User 0: ceDataInode=2781747 deDataInode=962510 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 ofs=0 pdm=false instant=false virtual=false quarantined=false
+      installReason=0
+      dataDir=/data/user/0/cn.verlu.sync
+      firstInstallTime=2026-04-14 19:48:17
+      uninstallReason=0
+      overlay paths:
+        /product/overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+        /data/resource-cache/com.android.systemui-neutral-94tC.frro
+        /data/resource-cache/com.android.systemui-accent-MnJY.frro
+        /data/resource-cache/com.android.systemui-dynamic-rx92.frro
+      legacy overlay paths:
+        /product/overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+      lastDisabledCaller: com.android.packageinstaller
+      gids=[3003]
+      runtime permissions:
+        android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|524288]
+        android.permission.ACCESS_COARSE_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.CAMERA: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+    User 10: ceDataInode=0 deDataInode=0 installed=false hidden=false suspended=false distractionFlags=0 stopped=true notLaunched=true enabled=0 ofs=0 pdm=false instant=false virtual=false quarantined=false
+      installReason=0
+      dataDir=null
+      firstInstallTime=1970-01-01 08:00:00
+      uninstallReason=0
+      gids=[3003]
+      runtime permissions:
+    User 999: ceDataInode=0 deDataInode=0 installed=false hidden=false suspended=false distractionFlags=0 stopped=true notLaunched=true enabled=0 ofs=0 pdm=false instant=false virtual=false quarantined=false
+      installReason=0
+      dataDir=null
+      firstInstallTime=1970-01-01 08:00:00
+      uninstallReason=0
+      gids=[3003]
+      runtime permissions:
+
+Queries:
+  system apps queryable: false
+  queries via forceQueryable:
+  queries via package name:
+    cn.verlu.memory:
+      cn.verlu.sync
+    cn.verlu.doctor:
+      cn.verlu.sync
+    cn.verlu.talk:
+      cn.verlu.sync
+    cn.verlu.cnchess:
+      cn.verlu.sync
+  queries via component:
+    com.maidu.gkld:
+      cn.verlu.sync
+    com.binance.dev:
+      cn.verlu.sync
+    com.absinthe.anywhere_:
+      cn.verlu.sync
+    com.okinc.okex.gp:
+      cn.verlu.sync
+    com.heytap.health:
+      cn.verlu.sync
+    com.cainiao.wireless:
+      cn.verlu.sync
+    com.jingdong.app.mall:
+      cn.verlu.sync
+    com.xunmeng.pinduoduo:
+      cn.verlu.sync
+    com.tencent.mm:
+      cn.verlu.sync
+    com.taobao.taobao:
+      cn.verlu.sync
+    com.tmri.app.main:
+      cn.verlu.sync
+    ru.zdevs.zarchiver:
+      cn.verlu.sync
+    com.microsoft.office.outlook:
+      cn.verlu.sync
+    com.quark.browser:
+      cn.verlu.sync
+    com.wireguard.android:
+      cn.verlu.sync
+    com.fenbi.android.servant:
+      cn.verlu.sync
+    com.netease.cloudmusic:
+      cn.verlu.sync
+    com.shizhuang.duapp:
+      cn.verlu.sync
+    com.boardmix.android:
+      cn.verlu.sync
+    pxb7.com:
+      cn.verlu.sync
+    com.aliyun.tongyi:
+      cn.verlu.sync
+    com.apkpure.aegon:
+      cn.verlu.sync
+    com.wakdev.nfctools.pro:
+      cn.verlu.sync
+    com.wakdev.nfctasks:
+      cn.verlu.sync
+    com.jd.jrapp:
+      cn.verlu.sync
+    com.whatsapp:
+      cn.verlu.sync
+    com.salt.music:
+      cn.verlu.sync
+    com.wuba.zhuanzhuan:
+      cn.verlu.sync
+    com.instagram.android:
+      cn.verlu.sync
+    com.facebook.katana:
+      cn.verlu.sync
+    com.psyone.brainmusic:
+      cn.verlu.sync
+    org.b3log.siyuan:
+      cn.verlu.sync
+  queryable via interaction:
+    User 0:
+      [com.oplus.qualityprotect,com.android.providers.settings,vendor.qti.frameworks.utils,com.android.keychain,com.oplus.logkit,com.oplus.obrain,com.oplus.appplatform,com.oplus.nas,com.oplus.onetrace,com.android.localtransport,com.oplus.appbooster,com.oplus.bttestmode,com.oplus.healthservice,com.oplus.securitypermission,com.android.DeviceAsWebcam,com.oplus.audio.effectcenter,com.qualcomm.qti.xrvd.service,com.android.dynsystem,com.oplus.crashbox,com.android.location.fused,com.heytap.mcs,com.oplus.engineermode,com.oplus.mediaturbo,com.oplus.safecenter,com.oplus.trafficmonitor,com.oplus.athena,com.oplus.sauhelper,com.oplus.notificationmanager,com.android.settings,com.oplus.wirelesssettings,android,com.oplus.customize.coreapp,com.oplus.wifibackuprestore,com.oplus.nearcomm,oplus,com.oplus.powermonitor,com.oplus.postmanservice,com.oplus.subsys,com.oplus.atlas,com.wapi.wapicertmanage,com.oplus.owkservice,com.android.inputdevices,com.oplus.sau,com.oplus.lfeh,com.android.server.telecom,com.oplus.olc,com.oplus.exsystemservice,com.oplus.engineernetwork,com.oplus.battery]:
+        cn.verlu.sync
+      [com.google.android.gms,com.google.android.gsf]:
+        cn.verlu.sync
+      com.tencent.wetype:
+        cn.verlu.sync
+      cn.verlu.sync:
+        [com.oplus.qualityprotect,com.android.providers.settings,vendor.qti.frameworks.utils,com.android.keychain,com.oplus.logkit,com.oplus.obrain,com.oplus.appplatform,com.oplus.nas,com.oplus.onetrace,com.android.localtransport,com.oplus.appbooster,com.oplus.bttestmode,com.oplus.healthservice,com.oplus.securitypermission,com.android.DeviceAsWebcam,com.oplus.audio.effectcenter,com.qualcomm.qti.xrvd.service,com.android.dynsystem,com.oplus.crashbox,com.android.location.fused,com.heytap.mcs,com.oplus.engineermode,com.oplus.mediaturbo,com.oplus.safecenter,com.oplus.trafficmonitor,com.oplus.athena,com.oplus.sauhelper,com.oplus.notificationmanager,com.android.settings,com.oplus.wirelesssettings,android,com.oplus.customize.coreapp,com.oplus.wifibackuprestore,com.oplus.nearcomm,oplus,com.oplus.powermonitor,com.oplus.postmanservice,com.oplus.subsys,com.oplus.atlas,com.wapi.wapicertmanage,com.oplus.owkservice,com.android.inputdevices,com.oplus.sau,com.oplus.lfeh,com.android.server.telecom,com.oplus.olc,com.oplus.exsystemservice,com.oplus.engineernetwork,com.oplus.battery]
+    User 10:
+    User 999:
+  queryable via uses-library:
+
+Dexopt state:
+  [cn.verlu.sync]
+    path: /data/app/~~rdfttG3QtFdN4BvCnbgacg==/cn.verlu.sync-dGZVlK3MciMzn1cBmWIlPQ==/base.apk
+      arm64: [status=speed-profile] [reason=bg-dexopt] [primary-abi]
+        [location is /data/app/~~rdfttG3QtFdN4BvCnbgacg==/cn.verlu.sync-dGZVlK3MciMzn1cBmWIlPQ==/oat/arm64/base.odex]
+
+Compiler stats:
+  [cn.verlu.sync]
+    (No recorded stats)

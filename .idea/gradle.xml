@@ -10,11 +10,8 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/cnchess" />
-            <option value="$PROJECT_DIR$/doctor" />
+            <option value="$PROJECT_DIR$/lulu" />
             <option value="$PROJECT_DIR$/memory" />
-            <option value="$PROJECT_DIR$/music" />
-            <option value="$PROJECT_DIR$/talk" />
           </set>
         </option>
       </GradleProjectSettings>

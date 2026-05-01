@@ -1,0 +1,72 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 259498155 Realtime: 345409551
+
+** MEMINFO in pid 19245 [cn.verlu.sync] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    18719    18688        4       21    21180    32768    30136     2631
+  Dalvik Heap    45406    45380       12      139    47108    30656     7664    22992
+ Dalvik Other     1460     1460        0        0     2080                           
+        Stack     1616     1616        0        0     1624                           
+       Ashmem        5        0        0        0      476                           
+      Gfx dev     3384     3384        0        0     3388                           
+    Other dev       40        0       40        0      612                           
+     .so mmap     2251      224     1020        2    42204                           
+    .jar mmap      727        0       40        0    42932                           
+    .apk mmap     8528        0     8152        0     9924                           
+    .ttf mmap     2390        0      888        0     6300                           
+    .dex mmap    10583       64    10516        0    11560                           
+    .oat mmap      245        0       12        0    16264                           
+    .art mmap     1603     1292       56       86    31552                           
+   Other mmap      143        4       48        0     1456                           
+      Unknown     5922     5608      284        1     6788                           
+        TOTAL   103271    77720    21072      249   245448    63424    37800    25623
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:    46728                          78660
+         Native Heap:    18688                          21180
+                Code:    20932                         129200
+               Stack:     1616                           1624
+            Graphics:     3384                           3388
+       Private Other:     7444
+              System:     4479
+             Unknown:                                   11396
+ 
+           TOTAL PSS:   103271            TOTAL RSS:   245448       TOTAL SWAP PSS:      249
+ 
+ Objects
+               Views:       13         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       35        AssetManagers:        0
+       Local Binders:       27        Proxy Binders:       93
+       Parcel memory:       17         Parcel count:       50
+    Death Recipients:        1             WebViews:        0
+ 
+ Native Allocations
+                         Count                       Total(kB)
+                        ------                         ------
+   Bitmap (malloced):       19                            378
+Bitmap (nonmalloced):        1                             64
+    Other (malloced):     6520                            622
+ Other (nonmalloced):      124                            341
+ 
+ SQL
+         MEMORY_USED:      317
+  PAGECACHE_OVERFLOW:       96          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4       48            100   334   195    12  /data/user/0/cn.verlu.sync/databases/sync.db
+         4        8                    0     0     0    (attached) temp
+         4       48             33     5    14     2  /data/user/0/cn.verlu.sync/databases/sync.db (2)
+         4       48             99    58    24     7  /data/user/0/cn.verlu.sync/databases/sync.db (1)
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+            393           238           631  /data/user/0/cn.verlu.sync/databases/sync.db
+
+
+

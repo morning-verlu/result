@@ -1,0 +1,8 @@
+FrameLayout id=android:id/content bounds=[0,0][1080,2400]
+  EditText flags=clickable,long-clickable,focusable bounds=[32,231][1048,1454]
+    TextView text="今天在想什么..." bounds=[74,273][362,336]
+  View flags=clickable,focusable bounds=[12,85][138,211]
+    View desc="取消" bounds=[43,116][106,179]
+  TextView text="记录" bounds=[148,106][262,188]
+  View flags=clickable bounds=[917,85][1069,211]
+    TextView text="保存" bounds=[957,121][1029,174]

@@ -1,0 +1,7 @@
+Starting: Intent { cmp=cn.verlu.sync/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: cn.verlu.sync/.MainActivity
+TotalTime: 244
+WaitTime: 253
+Complete

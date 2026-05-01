@@ -23,9 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "sync"
-include(":app")
-include(":talk")
-include(":music")
-include(":doctor")
-include(":cnchess")
-include(":memory")
+include(":lulu")

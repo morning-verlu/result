@@ -1,0 +1,7 @@
+FrameLayout id=android:id/content bounds=[120,923][960,1477]
+  TextView text="删除这条记忆？" bounds=[183,986][624,1077]
+  TextView text="删除后只会移除本地记录，后续云同步接入前不会影响任何云端数据。" bounds=[183,1119][897,1225]
+  View flags=clickable,focusable bounds=[745,1289][897,1415]
+    TextView text="删除" bounds=[785,1325][857,1378]
+  View flags=clickable,focusable bounds=[572,1289][724,1415]
+    TextView text="取消" bounds=[612,1325][684,1378]
