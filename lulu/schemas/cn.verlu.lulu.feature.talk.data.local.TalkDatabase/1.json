@@ -1,0 +1,227 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "662e3336d430c85a4f2da5b28cb0b00f",
+    "entities": [
+      {
+        "tableName": "messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `roomId` TEXT NOT NULL, `senderId` TEXT NOT NULL, `content` TEXT NOT NULL, `type` TEXT NOT NULL, `createdAtMs` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, `senderDisplayName` TEXT, `senderAvatarUrl` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roomId",
+            "columnName": "roomId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderId",
+            "columnName": "senderId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "createdAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDeleted",
+            "columnName": "isDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderDisplayName",
+            "columnName": "senderDisplayName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderAvatarUrl",
+            "columnName": "senderAvatarUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_messages_roomId",
+            "unique": false,
+            "columnNames": [
+              "roomId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_roomId` ON `${TABLE_NAME}` (`roomId`)"
+          },
+          {
+            "name": "index_messages_createdAtMs",
+            "unique": false,
+            "columnNames": [
+              "createdAtMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_createdAtMs` ON `${TABLE_NAME}` (`createdAtMs`)"
+          }
+        ]
+      },
+      {
+        "tableName": "conversations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`roomId` TEXT NOT NULL, `peerUserId` TEXT NOT NULL, `peerDisplayName` TEXT NOT NULL, `peerAvatarUrl` TEXT, `lastMessageContent` TEXT, `lastMessageAtMs` INTEGER NOT NULL, `lastMessageType` TEXT, `lastMessageDeleted` INTEGER NOT NULL, `unreadCount` INTEGER NOT NULL, PRIMARY KEY(`roomId`))",
+        "fields": [
+          {
+            "fieldPath": "roomId",
+            "columnName": "roomId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerUserId",
+            "columnName": "peerUserId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerDisplayName",
+            "columnName": "peerDisplayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerAvatarUrl",
+            "columnName": "peerAvatarUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastMessageContent",
+            "columnName": "lastMessageContent",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastMessageAtMs",
+            "columnName": "lastMessageAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMessageType",
+            "columnName": "lastMessageType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastMessageDeleted",
+            "columnName": "lastMessageDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unreadCount",
+            "columnName": "unreadCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "roomId"
+          ]
+        }
+      },
+      {
+        "tableName": "friendships",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `requesterId` TEXT NOT NULL, `addresseeId` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAtMs` INTEGER NOT NULL, `roomId` TEXT, `requesterDisplayName` TEXT, `requesterAvatarUrl` TEXT, `addresseeDisplayName` TEXT, `addresseeAvatarUrl` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requesterId",
+            "columnName": "requesterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addresseeId",
+            "columnName": "addresseeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "createdAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roomId",
+            "columnName": "roomId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requesterDisplayName",
+            "columnName": "requesterDisplayName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requesterAvatarUrl",
+            "columnName": "requesterAvatarUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addresseeDisplayName",
+            "columnName": "addresseeDisplayName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addresseeAvatarUrl",
+            "columnName": "addresseeAvatarUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '662e3336d430c85a4f2da5b28cb0b00f')"
+    ]
+  }
+}
