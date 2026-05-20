@@ -9,7 +9,7 @@ import cn.verlu.lulu.feature.lifestream.data.local.entity.TombstoneEntity
 
 @Database(
     entities = [MemoryEntryEntity::class, TombstoneEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class MemoryDatabase : RoomDatabase() {

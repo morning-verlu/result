@@ -31,4 +31,5 @@ data class MemoryEntryEntity(
     val lastSyncedAt: Long?,
     val lastSyncAttemptAt: Long?,
     val syncError: String,
+    val mediaListJson: String = "",
 )

@@ -31,7 +31,7 @@ object AppModule {
         context,
         MemoryDatabase::class.java,
         "memory.db",
-    ).addMigrations(MIGRATION_3_4).build()
+    ).addMigrations(MIGRATION_3_4, MIGRATION_4_5).build()
 
     @Provides
     @Singleton
@@ -68,9 +68,16 @@ object AppModule {
 
 /**
  * v3 → v4：schema 不变，只是建立显式迁移机制以保护现有数据。
+ * v4 → v5：schema 不变，保持数据库版本单调递增，避免已装过 v5 的包发生降级崩溃。
  * 未来修改 schema 时，在此文件添加新的 Migration 并在 addMigrations() 里注册。
  */
 private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // schema 不变，无需操作
+    }
+}
+
+private val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // schema 不变，无需操作
     }
