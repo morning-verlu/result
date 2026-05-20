@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cn.verlu.lulu.core.design.LuluAdaptiveScreen
 import cn.verlu.lulu.core.design.LuluSpacing
 import cn.verlu.lulu.core.feature.LuluFeatureId
 import cn.verlu.lulu.core.feature.LuluFeatureRegistry
@@ -38,38 +39,43 @@ fun AppsRoute(
     onOpenFeature: (LuluFeatureId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = LuluSpacing.screenHorizontal),
-        contentPadding = PaddingValues(
-            top = LuluSpacing.screenTop,
-            bottom = LuluSpacing.bottomNavPadding,
-        ),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+    LuluAdaptiveScreen(
+        modifier = modifier,
+        maxWidth = LuluSpacing.wideContentMaxWidth,
     ) {
-        item {
-            Text(
-                text = "内置能力都在这里。每个入口保留自己的核心工作流，但共享同一套账号和主题。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        item {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                maxItemsInEachRow = 2,
-            ) {
-                LuluFeatureRegistry.entries.forEach { entry ->
-                    AppTile(
-                        entry = entry,
-                        onClick = { onOpenFeature(entry.id) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = LuluSpacing.screenHorizontal),
+            contentPadding = PaddingValues(
+                top = LuluSpacing.screenTop,
+                bottom = LuluSpacing.bottomNavPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            item {
+                Text(
+                    text = "内置能力都在这里。每个入口保留自己的核心工作流，但共享同一套账号和主题。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            item {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    maxItemsInEachRow = 2,
+                ) {
+                    LuluFeatureRegistry.entries.forEach { entry ->
+                        AppTile(
+                            entry = entry,
+                            onClick = { onOpenFeature(entry.id) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }

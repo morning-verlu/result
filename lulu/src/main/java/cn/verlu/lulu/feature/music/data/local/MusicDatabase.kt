@@ -12,7 +12,7 @@ import cn.verlu.lulu.feature.music.data.local.entity.HiddenTrackEntity
         FavoriteTrackEntity::class
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class MusicDatabase : RoomDatabase() {
     abstract val trackDao: TrackDao

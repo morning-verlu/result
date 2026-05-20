@@ -1,10 +1,8 @@
 package cn.verlu.lulu.presentation.update
 
-import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
-import android.os.Environment
-import android.provider.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 @Serializable
 private data class AppReleaseRow(
@@ -86,12 +85,14 @@ class LuluAppUpdateViewModel @Inject constructor(
                 if (latest.versionCode <= currentVersionCode) return@runCatching null
 
                 val mandatory = latest.forceUpdate || currentVersionCode < latest.minSupportedVersionCode
-                val rollout = latest.rolloutPercent.coerceIn(1, 100)
-                val androidId = Settings.Secure
-                    .getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-                    .orEmpty()
-                val bucket = ((androidId.plus(packageName).hashCode() and Int.MAX_VALUE) % 100) + 1
-                if (!mandatory && bucket > rollout) return@runCatching null
+                if (!mandatory && !isInRollout(
+                        installId = rolloutInstallId(context),
+                        packageName = packageName,
+                        rolloutPercent = latest.rolloutPercent,
+                    )
+                ) {
+                    return@runCatching null
+                }
 
                 AppReleaseInfo(
                     versionCode = latest.versionCode,
@@ -109,29 +110,21 @@ class LuluAppUpdateViewModel @Inject constructor(
         }
     }
 
-    fun startDownload(context: Context) {
+    fun openDownloadPage(context: Context) {
         val release = _state.value.release ?: return
         runCatching {
-            val request = DownloadManager.Request(Uri.parse(release.downloadUrl))
-                .setTitle("${context.packageName} ${release.versionName}")
-                .setDescription("新版本安装包下载中")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setMimeType("application/vnd.android.package-archive")
-                .setDestinationInExternalPublicDir(
-                    Environment.DIRECTORY_DOWNLOADS,
-                    "${context.packageName}-${release.versionName}.apk",
-                )
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            downloadManager.enqueue(request)
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
         }.onSuccess {
             _state.update {
                 it.copy(
-                    message = "已开始下载，请在通知栏点击安装",
+                    message = "已打开下载页",
                     release = if (release.mandatory) release else null,
                 )
             }
         }.onFailure {
-            _state.update { state -> state.copy(message = "下载启动失败，请稍后重试") }
+            _state.update { state -> state.copy(message = "无法打开下载页，请稍后重试") }
         }
     }
 
@@ -143,6 +136,15 @@ class LuluAppUpdateViewModel @Inject constructor(
     fun consumeMessage() {
         _state.update { it.copy(message = null) }
     }
+}
+
+private fun rolloutInstallId(context: Context): String {
+    val prefs = context.getSharedPreferences("app_update_rollout", Context.MODE_PRIVATE)
+    val existing = prefs.getString("install_id", null)
+    if (!existing.isNullOrBlank()) return existing
+    val generated = UUID.randomUUID().toString()
+    prefs.edit().putString("install_id", generated).apply()
+    return generated
 }
 
 @Composable
@@ -185,7 +187,7 @@ fun LuluAppUpdateGate(
         },
         confirmButton = {
             TextButton(
-                onClick = { viewModel.startDownload(context.applicationContext) },
+                onClick = { viewModel.openDownloadPage(context.applicationContext) },
             ) {
                 Text("立即更新")
             }

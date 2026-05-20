@@ -9,7 +9,8 @@ import cn.verlu.lulu.data.local.dao.ChatDao
 import cn.verlu.lulu.data.local.dao.MemoryEntryDao
 import cn.verlu.lulu.data.memory.RoomMemoryRepository
 import cn.verlu.lulu.data.music.LocalMusicRepository
-import cn.verlu.lulu.data.remote.SupabaseConfig
+import cn.verlu.lulu.core.remote.SupabaseConfig
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.data.sync.AndroidBatteryStatusReader
 import cn.verlu.lulu.data.sync.AndroidDeviceTemperatureStatusSource
 import cn.verlu.lulu.data.sync.AndroidScreenTimeStatusSource
@@ -100,7 +101,7 @@ object AppModule {
     fun provideLuluDatabase(
         @ApplicationContext context: Context,
     ): LuluDatabase =
-        Room.databaseBuilder(context, LuluDatabase::class.java, "lulu.db")
+        Room.databaseBuilder(context, LuluDatabase::class.java, LuluDatabaseNames.MAIN)
             .addMigrations(*LuluDatabase.MIGRATIONS)
             .build()
 

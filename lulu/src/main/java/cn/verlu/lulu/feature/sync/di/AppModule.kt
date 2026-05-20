@@ -2,6 +2,7 @@ package cn.verlu.lulu.feature.sync.di
 
 import android.content.Context
 import androidx.room.Room
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.feature.sync.data.local.AppDatabase
 import cn.verlu.lulu.feature.sync.data.local.BatteryLevelDao
 import cn.verlu.lulu.feature.sync.data.local.ScreenTimeReportDao
@@ -35,7 +36,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "sync.db")
+        Room.databaseBuilder(context, AppDatabase::class.java, LuluDatabaseNames.SYNC)
             .addMigrations(
                 AppDatabase.MIGRATION_1_2,
                 AppDatabase.MIGRATION_2_3,

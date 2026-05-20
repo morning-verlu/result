@@ -12,7 +12,7 @@ import cn.verlu.lulu.feature.doctor.data.local.herb.HerbDao
 import cn.verlu.lulu.feature.doctor.data.local.herb.HerbFavoriteEntity
 import cn.verlu.lulu.feature.doctor.data.local.herb.HerbSearchCacheEntity
 import cn.verlu.lulu.feature.doctor.data.local.herb.HerbSpotlightEntity
-import cn.verlu.lulu.feature.doctor.data.remote.SupabaseConfig
+import cn.verlu.lulu.core.remote.SupabaseConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient

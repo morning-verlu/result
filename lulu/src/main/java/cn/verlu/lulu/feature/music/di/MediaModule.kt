@@ -1,6 +1,7 @@
 package cn.verlu.lulu.feature.music.di
 
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -24,6 +25,7 @@ object MediaModule {
 
     @Provides
     @Singleton
+    @androidx.annotation.OptIn(UnstableApi::class)
     fun provideSimpleCache(@ApplicationContext context: Context): SimpleCache {
         val dir = File(context.cacheDir, CACHE_DIR)
         return SimpleCache(
@@ -35,6 +37,7 @@ object MediaModule {
 
     @Provides
     @Singleton
+    @androidx.annotation.OptIn(UnstableApi::class)
     fun provideCacheDataSourceFactory(
         @ApplicationContext context: Context,
         cache: SimpleCache

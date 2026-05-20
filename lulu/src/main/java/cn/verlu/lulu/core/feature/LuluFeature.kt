@@ -50,8 +50,18 @@ object LuluFeatureRegistry {
             detail = "Today 的完整数据面板",
             chrome = FeatureChrome.FullscreenApp,
             domainPackage = "cn.verlu.lulu.feature.sync",
-            databaseName = "sync.db",
+            databaseName = LuluDatabaseNames.SYNC,
             requiredPermissions = listOf("定位", "使用情况访问"),
+        ),
+        LuluFeatureSpec(
+            id = LuluFeatureId.LifeStream,
+            title = "LifeStream",
+            icon = Icons.Default.Folder,
+            status = "日常记录 / 图片 / 视频",
+            detail = "时间线与云端媒体同步",
+            chrome = FeatureChrome.FullscreenApp,
+            domainPackage = "cn.verlu.lulu.feature.lifestream",
+            databaseName = LuluDatabaseNames.LIFE_STREAM,
         ),
         LuluFeatureSpec(
             id = LuluFeatureId.Talk,
@@ -61,7 +71,7 @@ object LuluFeatureRegistry {
             detail = "完整 IM 已内置",
             chrome = FeatureChrome.FullscreenApp,
             domainPackage = "cn.verlu.lulu.feature.talk",
-            databaseName = "talk.db",
+            databaseName = LuluDatabaseNames.TALK,
             requiredPermissions = listOf("相机", "麦克风"),
         ),
         LuluFeatureSpec(
@@ -72,7 +82,7 @@ object LuluFeatureRegistry {
             detail = "完整播放器与后台服务",
             chrome = FeatureChrome.FullscreenApp,
             domainPackage = "cn.verlu.lulu.feature.music",
-            databaseName = "music.db",
+            databaseName = LuluDatabaseNames.MUSIC,
             requiredPermissions = listOf("音频媒体", "通知"),
         ),
         LuluFeatureSpec(
@@ -83,7 +93,7 @@ object LuluFeatureRegistry {
             detail = "阅读器与图片预览",
             chrome = FeatureChrome.FullscreenApp,
             domainPackage = "cn.verlu.lulu.feature.doctor",
-            databaseName = "herb.db",
+            databaseName = LuluDatabaseNames.DOCTOR,
         ),
         LuluFeatureSpec(
             id = LuluFeatureId.CnChess,
@@ -112,7 +122,7 @@ object LuluFeatureRegistry {
             detail = "把回答保存成记忆",
             chrome = FeatureChrome.LuluShell,
             domainPackage = "cn.verlu.lulu.presentation.chat",
-            databaseName = "lulu.db",
+            databaseName = LuluDatabaseNames.MAIN,
         ),
     )
 

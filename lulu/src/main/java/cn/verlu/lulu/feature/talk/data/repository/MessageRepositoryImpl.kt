@@ -1,6 +1,7 @@
 package cn.verlu.lulu.feature.talk.data.repository
 
-import android.util.Log
+import cn.verlu.lulu.core.log.LuluLog
+import cn.verlu.lulu.core.remote.SupabaseConfig
 import cn.verlu.lulu.feature.talk.data.local.dao.ConversationDao
 import cn.verlu.lulu.feature.talk.data.local.dao.MessageDao
 import cn.verlu.lulu.feature.talk.data.local.entity.toEntity
@@ -10,7 +11,6 @@ import cn.verlu.lulu.feature.talk.data.remote.dto.MessageDto
 import cn.verlu.lulu.feature.talk.data.remote.dto.NewMessageDto
 import cn.verlu.lulu.feature.talk.data.remote.dto.ProfileDto
 import cn.verlu.lulu.feature.talk.data.remote.dto.toDomain
-import cn.verlu.lulu.feature.talk.data.remote.SupabaseConfig
 import cn.verlu.lulu.feature.talk.di.IoDispatcher
 import cn.verlu.lulu.feature.talk.domain.model.Conversation
 import cn.verlu.lulu.feature.talk.domain.model.Message
@@ -122,7 +122,7 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun refreshConversations() = withContext(ioDispatcher) {
         val userId = currentUserId()
-        Log.d(TAG, "refreshConversations: userId=$userId")
+        LuluLog.d(TAG, "refreshConversations: user=${LuluLog.shortId(userId)}")
 
         val friendships = runCatching {
             supabase.postgrest["friendships"].select {
@@ -134,16 +134,16 @@ class MessageRepositoryImpl @Inject constructor(
                     }
                 }
             }.decodeList<FriendshipDto>()
-        }.onFailure { Log.e(TAG, "refreshConversations: fetch friendships failed", it) }
+        }.onFailure { LuluLog.e(TAG, "refreshConversations: fetch friendships failed", it) }
             .getOrDefault(emptyList())
 
         val merged = dedupeAcceptedFriendshipsByPeer(userId, friendships)
         if (merged.size < friendships.size) {
-            Log.w(TAG, "refreshConversations: deduped friendships ${friendships.size} -> ${merged.size}")
+            LuluLog.w(TAG, "refreshConversations: deduped friendships ${friendships.size} -> ${merged.size}")
         }
 
         val withRoom = merged.filter { it.roomId != null }
-        Log.d(TAG, "refreshConversations: friendships=${merged.size} withRoom=${withRoom.size}")
+        LuluLog.d(TAG, "refreshConversations: friendships=${merged.size} withRoom=${withRoom.size}")
         if (withRoom.isEmpty()) {
             conversationDao.deleteAll()
             return@withContext
@@ -158,7 +158,7 @@ class MessageRepositoryImpl @Inject constructor(
             supabase.postgrest["profiles"].select {
                 filter { isIn("id", peerIds) }
             }.decodeList<ProfileDto>().associate { it.id to it.toDomain() }
-        }.onFailure { Log.e(TAG, "refreshConversations: fetch profiles failed", it) }
+        }.onFailure { LuluLog.e(TAG, "refreshConversations: fetch profiles failed", it) }
             .getOrDefault(emptyMap())
 
         val roomIds = withRoom.mapNotNull { it.roomId }
@@ -170,7 +170,7 @@ class MessageRepositoryImpl @Inject constructor(
                         order("created_at", Order.DESCENDING)
                         limit(1L)
                     }.decodeList<MessageDto>().firstOrNull()
-                }.onFailure { Log.e(TAG, "refreshConversations: last msg for $roomId failed", it) }
+                }.onFailure { LuluLog.e(TAG, "refreshConversations: last message failed room=${LuluLog.shortId(roomId)}", it) }
                     .getOrNull()
                 roomId to msg?.toDomain()
             }
@@ -180,25 +180,25 @@ class MessageRepositoryImpl @Inject constructor(
             val roomId = f.roomId ?: return@mapNotNull null
             val peerId = peerIdByRoom[roomId] ?: return@mapNotNull null
             val peer = profileMap[peerId] ?: run {
-                Log.w(TAG, "refreshConversations: no profile for peerId=$peerId")
+                LuluLog.w(TAG, "refreshConversations: no profile for peer=${LuluLog.shortId(peerId)}")
                 return@mapNotNull null
             }
             Conversation(roomId = roomId, peer = peer, lastMessage = lastMessages[roomId])
         }
 
         conversationDao.replaceAll(conversations.map { it.toEntity() })
-        Log.d(TAG, "refreshConversations: replaced ${conversations.size} conversations in Room")
+        LuluLog.d(TAG, "refreshConversations: replaced ${conversations.size} conversations in Room")
     }
 
     override suspend fun refreshMessages(roomId: String): Unit = withContext(ioDispatcher) {
-        Log.d(TAG, "refreshMessages: roomId=$roomId")
+        LuluLog.d(TAG, "refreshMessages: room=${LuluLog.shortId(roomId)}")
         val messages = runCatching {
             supabase.postgrest["messages"].select {
                 filter { eq("room_id", roomId) }
                 order("created_at", Order.ASCENDING)
                 limit(200L)
             }.decodeList<MessageDto>()
-        }.onFailure { Log.e(TAG, "refreshMessages failed roomId=$roomId", it) }
+        }.onFailure { LuluLog.e(TAG, "refreshMessages failed room=${LuluLog.shortId(roomId)}", it) }
             .getOrDefault(emptyList())
 
         val senderIds = messages.map { it.senderId }.distinct()
@@ -207,20 +207,20 @@ class MessageRepositoryImpl @Inject constructor(
                 supabase.postgrest["profiles"].select {
                     filter { isIn("id", senderIds) }
                 }.decodeList<ProfileDto>().associate { it.id to it.toDomain() }
-            }.onFailure { Log.e(TAG, "refreshMessages: fetch profiles failed", it) }
+            }.onFailure { LuluLog.e(TAG, "refreshMessages: fetch profiles failed", it) }
                 .getOrDefault(emptyMap())
         } else emptyMap()
 
         val domainMessages = messages.map { it.toDomain(profileMap[it.senderId]) }
         messageDao.upsertAll(domainMessages.map { it.toEntity() })
-        Log.d(TAG, "refreshMessages: upserted ${domainMessages.size} messages to Room")
+        LuluLog.d(TAG, "refreshMessages: upserted ${domainMessages.size} messages to Room")
     }
 
     // ─────────── Realtime ───────────
 
     override suspend fun subscribeToRoomMessages(roomId: String, onError: (Throwable) -> Unit) {
         val channelName = "room_messages_$roomId"
-        Log.d(TAG, "subscribeToRoomMessages: subscribing to channel=$channelName")
+        LuluLog.d(TAG, "subscribeToRoomMessages: subscribing to channel=$channelName")
         runCatching {
             val channel = supabase.realtime.channel(channelName)
             channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
@@ -229,9 +229,9 @@ class MessageRepositoryImpl @Inject constructor(
                 runCatching {
                     val dto = action.decodeRecord<MessageDto>()
                     if (dto.roomId != roomId) return@runCatching
-                    Log.d(TAG, "realtime: new message id=${dto.id} room=$roomId")
+                    LuluLog.d(TAG, "realtime: new message id=${LuluLog.shortId(dto.id)} room=${LuluLog.shortId(roomId)}")
                     upsertMessageFromDto(roomId, dto)
-                }.onFailure { Log.e(TAG, "realtime message processing failed", it) }
+                }.onFailure { LuluLog.e(TAG, "realtime message processing failed", it) }
             }.launchIn(repoScope)
             channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
                 table = "messages"
@@ -239,13 +239,13 @@ class MessageRepositoryImpl @Inject constructor(
                 runCatching {
                     val dto = action.decodeRecord<MessageDto>()
                     if (dto.roomId != roomId) return@runCatching
-                    Log.d(TAG, "realtime: message updated id=${dto.id} room=$roomId deleted=${dto.deletedAt != null}")
+                    LuluLog.d(TAG, "realtime: message updated id=${LuluLog.shortId(dto.id)} room=${LuluLog.shortId(roomId)} deleted=${dto.deletedAt != null}")
                     upsertMessageFromDto(roomId, dto)
-                }.onFailure { Log.e(TAG, "realtime message update failed", it) }
+                }.onFailure { LuluLog.e(TAG, "realtime message update failed", it) }
             }.launchIn(repoScope)
             channel.subscribe()
         }.onFailure {
-            Log.e(TAG, "subscribeToRoomMessages failed", it)
+            LuluLog.e(TAG, "subscribeToRoomMessages failed", it)
             onError(it)
         }
     }
@@ -254,51 +254,51 @@ class MessageRepositoryImpl @Inject constructor(
         val channelName = "room_messages_$roomId"
         runCatching {
             supabase.realtime.removeChannel(supabase.realtime.channel(channelName))
-        }.onFailure { Log.w(TAG, "unsubscribeFromRoom failed", it) }
+        }.onFailure { LuluLog.w(TAG, "unsubscribeFromRoom failed", it) }
     }
 
     override suspend fun subscribeToConversationUpdates(onUpdate: () -> Unit) {
         val channelName = "conv_list_friendships"
         convChannelName = channelName
         convOnUpdate = onUpdate
-        Log.d(TAG, "subscribeToConversationUpdates: channel=$channelName")
+        LuluLog.d(TAG, "subscribeToConversationUpdates: channel=$channelName")
         runCatching {
             val channel = supabase.realtime.channel(channelName)
             channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
                 table = "friendships"
             }.onEach {
-                Log.d(TAG, "conv realtime: friendships updated, refreshing conversations")
+                LuluLog.d(TAG, "conv realtime: friendships updated, refreshing conversations")
                 repoScope.launch {
                     runCatching { refreshConversations() }
-                        .onFailure { Log.e(TAG, "conv realtime: refreshConversations failed", it) }
+                        .onFailure { LuluLog.e(TAG, "conv realtime: refreshConversations failed", it) }
                     onUpdate()
                 }
             }.launchIn(repoScope)
             channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                 table = "friendships"
             }.onEach {
-                Log.d(TAG, "conv realtime: new friendship, refreshing conversations")
+                LuluLog.d(TAG, "conv realtime: new friendship, refreshing conversations")
                 repoScope.launch {
                     runCatching { refreshConversations() }
-                        .onFailure { Log.e(TAG, "conv realtime: refreshConversations failed", it) }
+                        .onFailure { LuluLog.e(TAG, "conv realtime: refreshConversations failed", it) }
                     onUpdate()
                 }
             }.launchIn(repoScope)
             channel.subscribe()
-        }.onFailure { Log.e(TAG, "subscribeToConversationUpdates failed", it) }
+        }.onFailure { LuluLog.e(TAG, "subscribeToConversationUpdates failed", it) }
     }
 
     override suspend fun unsubscribeFromConversationUpdates() {
         convChannelName?.let { name ->
             runCatching {
                 supabase.realtime.removeChannel(supabase.realtime.channel(name))
-            }.onFailure { Log.w(TAG, "unsubscribeFromConversationUpdates failed", it) }
+            }.onFailure { LuluLog.w(TAG, "unsubscribeFromConversationUpdates failed", it) }
         }
     }
 
     override suspend fun findDirectRoomIdForPeer(peerUserId: String): String? = withContext(ioDispatcher) {
         val userId = currentUserId()
-        Log.d(TAG, "findDirectRoomIdForPeer: me=$userId peer=$peerUserId")
+        LuluLog.d(TAG, "findDirectRoomIdForPeer: me=${LuluLog.shortId(userId)} peer=${LuluLog.shortId(peerUserId)}")
         // Try Room cache first
         val fromCache = conversationDao.observeAll().map { list ->
             list.firstOrNull { it.peerUserId == peerUserId }?.roomId
@@ -321,24 +321,24 @@ class MessageRepositoryImpl @Inject constructor(
                 }
                 limit(1L)
             }.decodeList<FriendshipDto>().firstOrNull()
-        }.onFailure { Log.e(TAG, "findDirectRoomIdForPeer failed", it) }.getOrNull()
+        }.onFailure { LuluLog.e(TAG, "findDirectRoomIdForPeer failed", it) }.getOrNull()
         val roomId = friendship?.roomId
-        Log.d(TAG, "findDirectRoomIdForPeer: roomId=$roomId")
+        LuluLog.d(TAG, "findDirectRoomIdForPeer: room=${LuluLog.shortId(roomId)}")
         roomId
     }
 
     override suspend fun sendMessage(roomId: String, content: String, type: String) {
         withContext(ioDispatcher) {
             val userId = currentUserId()
-            Log.d(TAG, "sendMessage: roomId=$roomId senderId=$userId content=${content.take(30)}")
+            LuluLog.d(TAG, "sendMessage: room=${LuluLog.shortId(roomId)} sender=${LuluLog.shortId(userId)} type=$type length=${content.length}")
             runCatching {
                 supabase.postgrest["messages"].insert(
                     NewMessageDto(roomId = roomId, senderId = userId, content = content, type = type)
                 )
             }.onSuccess {
-                Log.d(TAG, "sendMessage: success")
+                LuluLog.d(TAG, "sendMessage: success")
             }.onFailure {
-                Log.e(TAG, "sendMessage: FAILED", it)
+                LuluLog.e(TAG, "sendMessage: FAILED", it)
                 throw it
             }
         }
@@ -364,7 +364,7 @@ class MessageRepositoryImpl @Inject constructor(
                 val signedUrl = bucket.createSignedUrl(objectPath, 365.days)
                 sendMessage(roomId = roomId, content = signedUrl, type = "image")
             }.onFailure {
-                Log.e(TAG, "sendImageMessage: FAILED", it)
+                LuluLog.e(TAG, "sendImageMessage: FAILED", it)
                 throw it
             }
         }
@@ -393,7 +393,7 @@ class MessageRepositoryImpl @Inject constructor(
                 val content = "$durationMs|$signedUrl"
                 sendMessage(roomId = roomId, content = content, type = "voice")
             }.onFailure {
-                Log.e(TAG, "sendVoiceMessage: FAILED", it)
+                LuluLog.e(TAG, "sendVoiceMessage: FAILED", it)
                 throw it
             }
         }
@@ -401,7 +401,7 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun softDeleteMessage(messageId: String) {
         withContext(ioDispatcher) {
-            Log.d(TAG, "softDeleteMessage: id=$messageId")
+            LuluLog.d(TAG, "softDeleteMessage: id=${LuluLog.shortId(messageId)}")
             supabase.postgrest["messages"].update(
                 mapOf("deleted_at" to Instant.now().toString())
             ) {
@@ -423,7 +423,7 @@ class MessageRepositoryImpl @Inject constructor(
                     val reads = allMsgIds.map { mapOf("message_id" to it, "user_id" to userId) }
                     supabase.postgrest["message_reads"].upsert(reads)
                 }
-            }.onFailure { Log.w(TAG, "markAllRead failed roomId=$roomId", it) }
+            }.onFailure { LuluLog.w(TAG, "markAllRead failed room=${LuluLog.shortId(roomId)}", it) }
         }
     }
 }

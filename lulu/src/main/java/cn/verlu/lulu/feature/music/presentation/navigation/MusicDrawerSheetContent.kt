@@ -53,6 +53,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.verlu.lulu.R
 import cn.verlu.lulu.feature.music.presentation.music.vm.MusicDrawerViewModel
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +67,7 @@ fun MusicDrawerSheetContent(
     val scheduledMin by viewModel.scheduledSleepMinutes.collectAsStateWithLifecycle()
     val cacheBytes by viewModel.cacheBytes.collectAsStateWithLifecycle()
     val resolveCacheCount by viewModel.resolveCacheCount.collectAsStateWithLifecycle()
+    val githubUrl = stringResource(R.string.drawer_github_url)
 
     var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showCustomTimer by remember { mutableStateOf(false) }
@@ -185,10 +187,9 @@ fun MusicDrawerSheetContent(
                         )
                         TextButton(
                             onClick = {
-                                val url = context.getString(R.string.drawer_github_url)
                                 runCatching {
                                     context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, url.toUri())
+                                        Intent(Intent.ACTION_VIEW, githubUrl.toUri())
                                     )
                                 }
                             },
@@ -328,9 +329,9 @@ private fun formatBytes(n: Long): String {
     val mb = kb * kb
     val gb = mb * kb
     return when {
-        n >= gb -> String.format("%.2f GB", n.toDouble() / gb)
-        n >= mb -> String.format("%.2f MB", n.toDouble() / mb)
-        n >= kb -> String.format("%.1f KB", n.toDouble() / kb)
+        n >= gb -> String.format(Locale.US, "%.2f GB", n.toDouble() / gb)
+        n >= mb -> String.format(Locale.US, "%.2f MB", n.toDouble() / mb)
+        n >= kb -> String.format(Locale.US, "%.1f KB", n.toDouble() / kb)
         else -> "$n B"
     }
 }

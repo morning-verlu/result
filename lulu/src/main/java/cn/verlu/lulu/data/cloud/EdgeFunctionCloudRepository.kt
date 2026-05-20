@@ -1,6 +1,6 @@
 package cn.verlu.lulu.data.cloud
 
-import cn.verlu.lulu.data.remote.SupabaseConfig
+import cn.verlu.lulu.core.remote.SupabaseConfig
 import cn.verlu.lulu.di.ApplicationScope
 import cn.verlu.lulu.di.IoDispatcher
 import cn.verlu.lulu.domain.cloud.CloudFile

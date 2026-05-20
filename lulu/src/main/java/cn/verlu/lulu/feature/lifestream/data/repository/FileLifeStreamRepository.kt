@@ -13,7 +13,7 @@ import cn.verlu.lulu.feature.lifestream.data.local.dao.TombstoneDao
 import cn.verlu.lulu.feature.lifestream.data.local.entity.MemoryEntryEntity
 import cn.verlu.lulu.feature.lifestream.data.local.entity.TombstoneEntity
 import cn.verlu.lulu.feature.lifestream.data.local.MemorySettingsStore
-import cn.verlu.lulu.feature.lifestream.data.remote.SupabaseConfig
+import cn.verlu.lulu.core.remote.SupabaseConfig
 import cn.verlu.lulu.feature.lifestream.domain.model.LifeEntry
 import cn.verlu.lulu.feature.lifestream.domain.model.LifeMedia
 import cn.verlu.lulu.feature.lifestream.domain.model.LifeEntryType

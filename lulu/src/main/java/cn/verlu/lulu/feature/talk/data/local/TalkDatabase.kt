@@ -12,7 +12,7 @@ import cn.verlu.lulu.feature.talk.data.local.entity.MessageEntity
 @Database(
     entities = [MessageEntity::class, ConversationEntity::class, FriendshipEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class TalkDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao

@@ -2,6 +2,7 @@ package cn.verlu.lulu.feature.doctor.di
 
 import android.content.Context
 import androidx.room.Room
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.feature.doctor.data.local.herb.HerbDao
 import cn.verlu.lulu.feature.doctor.data.local.herb.HerbDatabase
 import dagger.Module
@@ -21,7 +22,7 @@ object HerbDatabaseModule {
         Room.databaseBuilder(
             context,
             HerbDatabase::class.java,
-            "herb_cache.db",
+            LuluDatabaseNames.DOCTOR,
         ).fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 

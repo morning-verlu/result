@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WeatherSnapshotEntity::class
     ],
     version = 7,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun batteryLevelDao(): BatteryLevelDao

@@ -3,10 +3,13 @@ package cn.verlu.lulu.presentation.navigation
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
@@ -35,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -44,6 +48,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import cn.verlu.lulu.core.auth.LocalLuluSession
+import cn.verlu.lulu.core.design.LuluSpacing
 import cn.verlu.lulu.core.feature.FeatureChrome
 import cn.verlu.lulu.core.feature.LuluFeatureId
 import cn.verlu.lulu.core.feature.LuluFeatureRegistry
@@ -164,31 +169,40 @@ fun LuluNavApp(
             },
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar {
-                        NavigationBarItem(
-                            selected = top == AppRoute.Today,
-                            onClick = { switchRoot(backStack, AppRoute.Today) },
-                            icon = { Icon(Icons.Default.Home, contentDescription = "今天") },
-                            label = { Text("今天") },
-                        )
-                        NavigationBarItem(
-                            selected = top == AppRoute.Memory,
-                            onClick = { switchRoot(backStack, AppRoute.Memory) },
-                            icon = { Icon(Icons.Default.Favorite, contentDescription = "记忆") },
-                            label = { Text("记忆") },
-                        )
-                        NavigationBarItem(
-                            selected = top == AppRoute.Apps,
-                            onClick = { switchRoot(backStack, AppRoute.Apps) },
-                            icon = { Icon(Icons.Default.Apps, contentDescription = "应用") },
-                            label = { Text("应用") },
-                        )
-                        NavigationBarItem(
-                            selected = top == AppRoute.Mine,
-                            onClick = { switchRoot(backStack, AppRoute.Mine) },
-                            icon = { Icon(Icons.Default.Person, contentDescription = "我的") },
-                            label = { Text("我的") },
-                        )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        NavigationBar(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = LuluSpacing.bottomNavMaxWidth),
+                        ) {
+                            NavigationBarItem(
+                                selected = top == AppRoute.Today,
+                                onClick = { switchRoot(backStack, AppRoute.Today) },
+                                icon = { Icon(Icons.Default.Home, contentDescription = "今天") },
+                                label = { Text("今天") },
+                            )
+                            NavigationBarItem(
+                                selected = top == AppRoute.Memory,
+                                onClick = { switchRoot(backStack, AppRoute.Memory) },
+                                icon = { Icon(Icons.Default.Favorite, contentDescription = "记忆") },
+                                label = { Text("记忆") },
+                            )
+                            NavigationBarItem(
+                                selected = top == AppRoute.Apps,
+                                onClick = { switchRoot(backStack, AppRoute.Apps) },
+                                icon = { Icon(Icons.Default.Apps, contentDescription = "应用") },
+                                label = { Text("应用") },
+                            )
+                            NavigationBarItem(
+                                selected = top == AppRoute.Mine,
+                                onClick = { switchRoot(backStack, AppRoute.Mine) },
+                                icon = { Icon(Icons.Default.Person, contentDescription = "我的") },
+                                label = { Text("我的") },
+                            )
+                        }
                     }
                 }
             },

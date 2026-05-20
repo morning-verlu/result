@@ -115,6 +115,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import cn.verlu.lulu.feature.lifestream.domain.model.LifeEntry
@@ -142,6 +143,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 sealed interface LifeStreamRoute {
     data object Home : LifeStreamRoute
@@ -1405,6 +1407,7 @@ private fun imageDiskCacheFile(context: Context, cacheKey: String, uri: String):
 }
 
 @Composable
+@androidx.annotation.OptIn(UnstableApi::class)
 private fun VideoPlayerDialog(
     videoUri: String,
     onDismiss: () -> Unit,
@@ -1467,9 +1470,9 @@ private fun formatVideoDuration(durationMs: Long): String {
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
     return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        String.format("%02d:%02d", minutes, seconds)
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
 

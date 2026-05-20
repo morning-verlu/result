@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cn.verlu.lulu.core.design.LuluAdaptiveScreen
+import cn.verlu.lulu.core.design.LuluSpacing
 import cn.verlu.lulu.domain.memory.Memory
 import cn.verlu.lulu.domain.memory.MemorySyncStatus
 import cn.verlu.lulu.domain.sync.SyncStatusType
@@ -69,67 +71,72 @@ fun TodayRoute(
     }
     val greeting = remember { greetingFor(LocalTime.now()) }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item {
-            HeaderSection(
-                dateText = dateText,
-                greeting = greeting,
-            )
-        }
-
-        if (isOfflineSession) {
+    LuluAdaptiveScreen(modifier = modifier) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = LuluSpacing.screenHorizontal),
+            contentPadding = PaddingValues(
+                top = LuluSpacing.screenTop,
+                bottom = LuluSpacing.bottomNavPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
             item {
-                OfflineCard()
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SectionTitle("今日状态")
-                AssistChip(
-                    onClick = onOpenSyncApp,
-                    label = { Text("完整面板") },
+                HeaderSection(
+                    dateText = dateText,
+                    greeting = greeting,
                 )
             }
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                maxItemsInEachRow = 2,
-            ) {
-                statusState.cards.forEach { item ->
-                    StatusCard(
-                        item = item,
-                        onClick = { onStatusClick(item.type) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1.55f),
-                    )
+
+            if (isOfflineSession) {
+                item {
+                    OfflineCard()
                 }
             }
-        }
 
-        item {
-            SectionTitle("最近记忆")
-            RecentMemorySection(
-                memories = statusState.recentMemories,
-                onMemoryClick = onMemoryClick,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SectionTitle("今日状态")
+                    AssistChip(
+                        onClick = onOpenSyncApp,
+                        label = { Text("完整面板") },
+                    )
+                }
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    maxItemsInEachRow = 2,
+                ) {
+                    statusState.cards.forEach { item ->
+                        StatusCard(
+                            item = item,
+                            onClick = { onStatusClick(item.type) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1.55f),
+                        )
+                    }
+                }
+            }
 
+            item {
+                SectionTitle("最近记忆")
+                RecentMemorySection(
+                    memories = statusState.recentMemories,
+                    onMemoryClick = onMemoryClick,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+        }
     }
 }
 

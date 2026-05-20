@@ -2,6 +2,7 @@ package cn.verlu.lulu.feature.music.service
 
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -18,6 +19,7 @@ import javax.inject.Inject
  * and is destroyed when there are no more active sessions.
  */
 @AndroidEntryPoint
+@androidx.annotation.OptIn(UnstableApi::class)
 class MusicPlayerService : MediaSessionService() {
 
     @Inject

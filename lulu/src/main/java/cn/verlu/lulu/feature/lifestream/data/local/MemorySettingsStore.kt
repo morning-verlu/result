@@ -1,7 +1,7 @@
 package cn.verlu.lulu.feature.lifestream.data.local
 
 import android.content.Context
-import cn.verlu.lulu.feature.lifestream.data.remote.SupabaseConfig
+import cn.verlu.lulu.core.remote.SupabaseConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,18 +52,18 @@ class MemorySettingsStore @Inject constructor(
 
     fun setShowCloudBadge(enabled: Boolean) {
         _showCloudBadge.value = enabled
-        prefs.edit().putBoolean(KEY_SHOW_CLOUD_BADGE, enabled).commit()
+        prefs.edit().putBoolean(KEY_SHOW_CLOUD_BADGE, enabled).apply()
     }
 
     fun setCloudSyncEnabled(enabled: Boolean) {
         _cloudSyncEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_CLOUD_SYNC_ENABLED, enabled).commit()
+        prefs.edit().putBoolean(KEY_CLOUD_SYNC_ENABLED, enabled).apply()
     }
 
     fun setMediaCdnBaseUrl(baseUrl: String) {
         val normalized = baseUrl.trim().trimEnd('/')
         _mediaCdnBaseUrl.value = normalized
-        prefs.edit().putString(KEY_MEDIA_CDN_BASE_URL, normalized).commit()
+        prefs.edit().putString(KEY_MEDIA_CDN_BASE_URL, normalized).apply()
     }
 
     fun isCloudSyncEnabled(): Boolean = prefs.getBoolean(KEY_CLOUD_SYNC_ENABLED, false)

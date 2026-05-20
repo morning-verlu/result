@@ -2,6 +2,7 @@ package cn.verlu.lulu.feature.talk.di
 
 import android.content.Context
 import androidx.room.Room
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.feature.talk.data.local.TalkDatabase
 import cn.verlu.lulu.feature.talk.data.local.dao.ConversationDao
 import cn.verlu.lulu.feature.talk.data.local.dao.FriendshipDao
@@ -37,7 +38,7 @@ object TalkModule {
     @Provides
     @Singleton
     fun provideTalkDatabase(@ApplicationContext context: Context): TalkDatabase =
-        Room.databaseBuilder(context, TalkDatabase::class.java, "lulu-talk.db")
+        Room.databaseBuilder(context, TalkDatabase::class.java, LuluDatabaseNames.TALK)
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .build()
 

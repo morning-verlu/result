@@ -1,10 +1,12 @@
 package cn.verlu.lulu.feature.music.data.repository
 
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.cache.SimpleCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@androidx.annotation.OptIn(UnstableApi::class)
 class PlayerCacheRepository @Inject constructor(
     private val cache: SimpleCache
 ) {

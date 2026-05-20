@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.feature.lifestream.data.local.MemoryDatabase
 import cn.verlu.lulu.feature.lifestream.data.local.MemorySettingsStore
 import cn.verlu.lulu.feature.lifestream.data.local.dao.MemoryEntryDao
@@ -30,7 +31,7 @@ object AppModule {
     ): MemoryDatabase = Room.databaseBuilder(
         context,
         MemoryDatabase::class.java,
-        "memory.db",
+        LuluDatabaseNames.LIFE_STREAM,
     ).addMigrations(MIGRATION_3_4, MIGRATION_4_5).build()
 
     @Provides

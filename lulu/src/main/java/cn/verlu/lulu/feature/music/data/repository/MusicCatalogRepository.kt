@@ -1,7 +1,7 @@
 package cn.verlu.lulu.feature.music.data.repository
 
 import android.content.Context
-import android.util.Log
+import cn.verlu.lulu.core.log.LuluLog
 import cn.verlu.lulu.feature.music.domain.model.CatalogTrack
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
@@ -49,16 +49,16 @@ class MusicCatalogRepository @Inject constructor(
         if (trimmed.isEmpty()) return emptyList()
         val encoded = URLEncoder.encode(trimmed, Charsets.UTF_8.name())
         val api = "$SEARCH_API$encoded"
-        Log.d(TAG, "search request: keyword=$trimmed, url=$api")
+        LuluLog.d(TAG, "search request: keywordLength=${trimmed.length}")
         val body = requestWithRetry("search") { httpGet(api) }
-        Log.d(TAG, "search response body: ${body.take(LOG_PREVIEW_LEN)}")
+        LuluLog.d(TAG, "search response received bytes=${body.length}")
         return parseTracks(body).take(limit)
     }
 
     fun fetchDiscoverList(limit: Int = 80): List<CatalogTrack> {
-        Log.d(TAG, "discover request: url=$DISCOVER_API")
+        LuluLog.d(TAG, "discover request")
         val body = requestWithRetry("discover") { httpGet(DISCOVER_API) }
-        Log.d(TAG, "discover response body: ${body.take(LOG_PREVIEW_LEN)}")
+        LuluLog.d(TAG, "discover response received bytes=${body.length}")
         return parseTracks(body).take(limit)
     }
 
@@ -72,9 +72,9 @@ class MusicCatalogRepository @Inject constructor(
         }
         val encodedRid = URLEncoder.encode(rid, Charsets.UTF_8.name())
         val api = "$RESOLVE_API$encodedRid&type=json&level=exhigh&lrc=true"
-        Log.d(TAG, "resolve request: rid=$rid, url=$api")
+        LuluLog.d(TAG, "resolve request rid=${LuluLog.shortId(rid)}")
         val body = requestWithRetry("resolve rid=$rid") { httpGet(api) }
-        Log.d(TAG, "resolve response body: ${body.take(LOG_PREVIEW_LEN)}")
+        LuluLog.d(TAG, "resolve response received bytes=${body.length}")
         val root = json.parseToJsonElement(body).jsonObject
         val data = root["data"]?.jsonObject ?: error("解析失败：缺少 data 字段")
         val url = data["url"]?.jsonPrimitive?.contentOrNull
@@ -120,7 +120,7 @@ class MusicCatalogRepository @Inject constructor(
         }
         return conn.useConnection {
             val code = responseCode
-            Log.d(TAG, "validate response: code=$code, url=$url")
+            LuluLog.d(TAG, "validate response: code=$code")
             code in 200..299 || code == 206
         }
     }
@@ -136,7 +136,7 @@ class MusicCatalogRepository @Inject constructor(
             val code = responseCode
             val stream = if (code in 200..299) inputStream else errorStream
             val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            Log.d(TAG, "http response: code=$code, url=$url")
+            LuluLog.d(TAG, "http response: code=$code")
             if (code !in 200..299) throw mapHttpError(code, text)
             text
         }
@@ -188,7 +188,7 @@ class MusicCatalogRepository @Inject constructor(
             } catch (t: Throwable) {
                 last = t
                 val retryable = t is IOException || t is SocketTimeoutException || t is UnknownHostException
-                Log.w(TAG, "$label failed (attempt=${attempt + 1}/$retryCount): ${t.message}")
+                LuluLog.w(TAG, "$label failed (attempt=${attempt + 1}/$retryCount): ${t.message}")
                 if (!retryable || attempt == retryCount - 1) break
                 Thread.sleep((300L * (attempt + 1)).coerceAtMost(1200L))
                 attempt++

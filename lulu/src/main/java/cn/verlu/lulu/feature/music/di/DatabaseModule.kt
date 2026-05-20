@@ -2,6 +2,7 @@ package cn.verlu.lulu.feature.music.di
 
 import android.app.Application
 import androidx.room.Room
+import cn.verlu.lulu.core.feature.LuluDatabaseNames
 import cn.verlu.lulu.feature.music.data.local.MusicDatabase
 import cn.verlu.lulu.feature.music.data.local.dao.TrackDao
 import dagger.Module
@@ -20,7 +21,7 @@ object DatabaseModule {
         return Room.databaseBuilder(
             app,
             MusicDatabase::class.java,
-            "music.db"
+            LuluDatabaseNames.MUSIC
         ).build()
     }
 

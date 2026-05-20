@@ -3,10 +3,10 @@ package cn.verlu.lulu
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import cn.verlu.lulu.core.log.LuluLog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import cn.verlu.lulu.presentation.auth.vm.AuthEventManager
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
             "login" -> {
                 supabase.handleDeeplinks(
                     intent = intent,
-                    onError = { Log.e(TAG, "Auth deeplink failed", it) },
+                    onError = { LuluLog.e(TAG, "Auth deeplink failed", it) },
                 )
             }
             "authorize_sso" -> {
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         if (uri == null) return
         val fragment = uri.fragment.orEmpty()
         if (fragment.contains("error=") || fragment.contains("error_description=")) {
-            Log.e(TAG, "Auth callback fragment=$fragment")
+            LuluLog.e(TAG, "Auth callback returned error")
         }
         val isRecovery = fragment.contains("type=recovery") || uri.getQueryParameter("type") == "recovery"
         if (isRecovery) {

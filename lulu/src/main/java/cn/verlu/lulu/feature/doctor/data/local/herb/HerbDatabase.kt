@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         HerbFavoriteEntity::class,
     ],
     version = 3,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class HerbDatabase : RoomDatabase() {
     abstract fun herbDao(): HerbDao
